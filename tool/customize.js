@@ -10,7 +10,6 @@ let modules = {
     base: 1, //base模块
     style: 1, //是否有样式处理
 
-    updater: 1, //自动更新
     updaterDOM: 1, //dom增量更新
     updaterQuick: 1,//quick
 
@@ -29,9 +28,7 @@ let modules = {
     state: 1, //状态
     cnum: 1, //Cache num
     ceach: 1, //Cache each
-
-    vframeHost: 1, //父子化同一个view中嵌套存在的vframe
-    layerVframe: 1,//
+    
     viewProtoMixins: 1, //支持mixins
     defaultView: 1, //自动初始化
     //autoEndUpdate: 1, //自动识别并结束更新。针对没有tmpl属性的view自动识别并结束更新

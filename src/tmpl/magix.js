@@ -138,7 +138,6 @@ let G_ToMap = (list, key) => {
     return map;
 };
 /*#}#*/
-/*#if(modules.updater){#*/
 let G_ParseCache = new G_Cache();
 let G_ParseExpr = (expr, data, result) => {
     if (G_ParseCache.has(expr)) {
@@ -157,7 +156,6 @@ let G_ParseExpr = (expr, data, result) => {
     }
     return result;
 };
-/*#}#*/
 /**
  * Magix对象，提供常用方法
  * @name Magix
@@ -492,13 +490,13 @@ let Magix = {
      * let id = Magix.guid('mx-');
      * // id maybe mx-7
      */
+    /*#if(!modules.mini){#*/
     guid: G_Id,
-    use: G_Require,
     Cache: G_Cache,
-    /*#if(modules.naked&&!modules.mini){#*/
+    use: G_Require,
     fire: G_Trigger,
     type: G_Type,
-    /*#}#*/
     nodeId: IdIt,
     guard: Safeguard
+    /*#}#*/
 };

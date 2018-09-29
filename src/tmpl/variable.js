@@ -6,9 +6,6 @@ let G_NULL = null;
 let G_WINDOW = window;
 let G_Undefined = void G_COUNTER;
 let G_DOCUMENT = document;
-/*#if(!modules.naked){#*/
-let G_DOC = $(G_DOCUMENT);
-/*#}#*/
 let Timeout = G_WINDOW.setTimeout;
 let G_CHANGED = 'changed';
 let G_CHANGE = 'change';
@@ -20,9 +17,7 @@ let G_Tag_View_Key = 'mxv';
 let G_Tag_View_Owner = 'mxo';
 let G_HashKey = '#';
 function G_NOOP() { }
-/*#if(modules.service||modules.updater){#*/
 let JSONStringify = JSON.stringify;
-/*#}#*/
 let G_DOCBODY; //initilize at vframe_root
 /*
     关于spliter
@@ -55,7 +50,6 @@ let Magix_Cfg = {
 };
 
 let G_GetById = id => typeof id == Magix_StrObject ? id : G_DOCUMENT.getElementById(id);
-/*#if(modules.updater||modules.state){#*/
 let G_IsPrimitive = args => !args || typeof args != Magix_StrObject;
 let G_Set = (newData, oldData, keys, unchanged) => {
     let changed = 0,
@@ -71,7 +65,6 @@ let G_Set = (newData, oldData, keys, unchanged) => {
     }
     return changed;
 };
-/*#}#*/
 let G_NodeIn = (a, b, r) => {
     a = G_GetById(a);
     b = G_GetById(b);
@@ -114,12 +107,8 @@ let {
 } = Object;
 /*#}#*/
 /*#if(modules.style){#*/
-/*#if(modules.naked){#*/
 let Header = document.head;
 let Temp = document.createElement('div');
-/*#}else{#*/
-let Header = $('head');
-/*#}#*/
 let View_ApplyStyle = (key, css) => {
     if (DEBUG && G_IsArray(key)) {
         for (let i = 0; i < key.length; i += 2) {
@@ -133,18 +122,11 @@ let View_ApplyStyle = (key, css) => {
             if (key.indexOf('$throw_') === 0) {
                 throw new Error(css);
             }
-            /*#if(modules.naked){#*/
             Temp.innerHTML = `<style id="${key}">${css}`;
             Header.appendChild(Temp.firstChild);
-            /*#}else{#*/
-            Header.append(`<style id="${key}">${css}`);
-            /*#}#*/
-        } else {/*#if(modules.naked){#*/
+        } else {
             Temp.innerHTML = `<style>${css}`;
             Header.appendChild(Temp.firstChild);
-            /*#}else{#*/
-            Header.append(`<style>${css}`);
-            /*#}#*/
         }
     }
 };
@@ -165,7 +147,6 @@ let G_ToTry = (fns, args, context, r, e) => {
 };
 
 let G_Has = (owner, prop) => owner && Magix_HasProp.call(owner, prop); //false 0 G_NULL '' undefined
-/*#if(modules.updater){#*/
 let G_TranslateData = (data, params) => {
     let p, val;
     if (G_IsPrimitive(params)) {
@@ -182,4 +163,3 @@ let G_TranslateData = (data, params) => {
     }
     return params;
 };
-/*#}#*/

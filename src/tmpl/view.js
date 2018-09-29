@@ -302,7 +302,6 @@ let Updater_EncodeURI = v => encodeURIComponent(Updater_Safeguard(v)).replace(Up
 
 let Updater_QR = /[\\'"]/g;
 let Updater_EncodeQ = v => Updater_Safeguard(v).replace(Updater_QR, '\\$&');
-let Updater_ChangedKeys = {};
 let Updater_Digest = (view, digesting) => {
     let keys = view['@{view#updater.keys}'],
         changed = view['@{view#updater.data.changed}'],
@@ -330,7 +329,6 @@ let Updater_Digest = (view, digesting) => {
     view['@{view#updater.data.changed}'] = 0;
     view['@{view#updater.keys}'] = {};
     if (changed && view['@{view#sign}'] > 0 && (tmpl = view.tmpl)) {
-        Updater_ChangedKeys[selfId] = keys;
         view.fire('dompatch');
         delete Body_RangeEvents[selfId];
         delete Body_RangeVframes[selfId];
@@ -340,8 +338,8 @@ let Updater_Digest = (view, digesting) => {
         vdom = I_GetNode(tmpl(data, selfId, refData, Updater_Encode, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ), node);
         /*#}#*/
         /*#if(modules.updaterQuick){#*/
-        V_SetChildNodes(node, updater['@{view#updater.vdom}'], vdom, ref, vf, keys);
-        updater['@{view#updater.vdom}'] = vdom;
+        V_SetChildNodes(node, view['@{view#updater.vdom}'], vdom, ref, vf, keys);
+        view['@{view#updater.vdom}'] = vdom;
         /*#}else{#*/
         I_SetChildNodes(node, vdom, ref, vf, keys);
         /*#}#*/
@@ -371,7 +369,6 @@ let Updater_Digest = (view, digesting) => {
         if (tmpl) {
             view.endUpdate(selfId);
         }
-        delete Updater_ChangedKeys[selfId];
         /*#if(!modules.mini){#*/
         if (ref.c) {
             G_Trigger(G_DOCUMENT, 'htmlchanged', {
@@ -437,7 +434,7 @@ function View(id, owner, ops, node, me) {
     me['@{view#sign}'] = 1; //标识view是否刷新过，对于托管的函数资源，在回调这个函数时，不但要确保view没有销毁，而且要确保view没有刷新过，如果刷新过则不回调
     me['@{view#updater.data.changed}'] = 1;
     me['@{view#updater.data}'] = {
-        vId: viewId
+        id
     };
     me['@{view#updater.ref.data}'] = {
         [G_SPLITER]: 1
@@ -894,8 +891,8 @@ G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      * }
      */
     digest(data, unchanged, resolve) {
-        let me = this.set(data, unchanged)/*#if(!modules.updaterAsync){#*/,
-            digesting = me['@{view#updater.digesting.list}']/*#}#*/;
+        let me = this.set(data, unchanged),
+            digesting = me['@{view#updater.digesting.list}'];
         /*
             view:
             <div>

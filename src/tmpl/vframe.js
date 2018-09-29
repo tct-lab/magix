@@ -37,7 +37,7 @@ let Vframe_NotifyAlter = (vframe, e) => {
 let Vframe_TranslateQuery = (pId, src, params, pVf) => {
     pVf = Vframe_Vframes[pId];
     pVf = pVf && pVf['@{vframe#view.entity}'];
-    pVf = pVf ? pVf['@{view#updater}']['@{updater#ref.data}'] : {};
+    pVf = pVf ? pVf['@{view#updater.ref.data}'] : {};
     if (src.indexOf(G_SPLITER) > 0) {
         G_TranslateData(pVf, params);
     }
@@ -108,7 +108,7 @@ let Vframe_RemoveVframe = (id, fcc, vframe) => {
         id = G_GetById(id);
         if (id) {
             id['@{node#mounted.vframe}'] = 0;
-            /*#if(modules.updaterDOM){#*/
+            /*#if(!modules.updaterQuick){#*/
             id['@{node#auto.id}'] = 0;
             /*#}#*/
         }
@@ -211,7 +211,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
         let me = this;
         let id = me.id;
         let node = G_GetById(id),
-            pId = me.hId || me.pId, po, sign, view, params /*#if(modules.viewProtoMixins){#*/, ctors /*#}#*/ /*#if(modules.updater){#*/, parentVf/*#}#*//*#if(modules.viewChildren&&modules.updaterQuick){#*/, vnode/*#}#*/;
+            pId = me.hId || me.pId, po, sign, view, params /*#if(modules.viewProtoMixins){#*/, ctors /*#}#*/, parentVf/*#if(modules.viewChildren&&modules.updaterQuick){#*/, vnode/*#}#*/;
         if (!me['@{vframe#alter.node}'] && node) { //alter
             me['@{vframe#alter.node}'] = 1;
             me['@{vframe#template}'] = node.innerHTML; //.replace(ScriptsReg, ''); template
@@ -223,10 +223,8 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
         if (node && view) {
             me[G_PATH] = viewPath;
             params = po[G_PARAMS];
-            /*#if(modules.updater){#*/
             /*#if(modules.viewChildren){#*/parentVf = /*#}#*/Vframe_TranslateQuery(pId, viewPath, params);
             me['@{vframe#view.path}'] = po[G_PATH];
-            /*#}#*/
             G_Assign(params, viewInitParams);
             sign = me['@{vframe#sign}'];
             G_Require(view, TView => {

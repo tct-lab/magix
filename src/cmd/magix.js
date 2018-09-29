@@ -1,9 +1,5 @@
 define('magix', () => {
     if (typeof DEBUG == 'undefined') window.DEBUG = true;
-    let G_Type = o => Object.prototype.toString.call(o).slice(8, -1);
-    let G_IsType = type => o => G_Type(o) == type;
-    let G_IsObject = G_IsType('Object');
-    let G_IsArray = G_IsType('Array');
     Inc('../tmpl/naked');
     Inc('../tmpl/variable');
     Inc('../tmpl/cache');
@@ -57,14 +53,11 @@ define('magix', () => {
     /*#if(modules.viewChildren){#*/
     Inc('../tmpl/children');
     /*#}#*/
-    /*#if(modules.updater){#*/
     /*#if(modules.updaterQuick){#*/
     Inc('../tmpl/quick');
     Inc('../tmpl/vdom');
-    /*#}else if(modules.updaterDOM){#*/
+    /*#}else{#*/
     Inc('../tmpl/dom');
-    /*#}#*/
-    Inc('../tmpl/updater');
     /*#}#*/
     Inc('../tmpl/view');
     /*#if(modules.service){#*/

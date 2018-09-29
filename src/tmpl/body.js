@@ -101,10 +101,8 @@ let Body_FindVframeInfo = (current, eventType) => {
             }
         }
         //if (selectorVfId != G_HashKey) { //从最近的vframe向上查找带有选择器事件的view
-        /*#if(modules.layerVframe){#*/
         //主要兼容服务端输出，不带id的情况
         let findParent = match && !match.v;
-        /*#}#*/
         begin = current.id;
         if (Vframe_Vframes[begin]) {
             /*
@@ -149,7 +147,6 @@ let Body_FindVframeInfo = (current, eventType) => {
                     }
                 }
                 //防止跨view选中，到带模板的view时就中止或未指定
-                /*#if(modules.layerVframe){#*/
                 if (findParent) {
                     if (match.v) {
                         eventInfos.push({ ...match, v: selectorVfId });
@@ -157,11 +154,8 @@ let Body_FindVframeInfo = (current, eventType) => {
                         match.v = selectorVfId;
                     }
                 }
-                /*#}#*/
                 if (view.tmpl && !backtrace) {
-                    /*#if(!modules.layerVframe){#*/
                     if (match && !match.v) match.v = selectorVfId;
-                    /*#}#*/
                     break; //带界面的中止
                 }
                 backtrace = 0;
@@ -204,7 +198,7 @@ let Body_DOMEventProcessor = domEvent => {
                     fn = view[eventName];
                     if (fn) {
                         domEvent.eventTarget = target;
-                        params = i ? G_ParseExpr(i, view['@{view#updater}']['@{updater#ref.data}']) : {};
+                        params = i ? G_ParseExpr(i, view['@{view#updater.ref.data}']) : {};
                         domEvent[G_PARAMS] = params;
                         G_ToTry(fn, domEvent, view);
                         //没发现实际的用途

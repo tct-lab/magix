@@ -147,57 +147,6 @@ declare namespace Magix {
         }
     }
     /**
-     * view更新器接口
-     */
-    interface Updater {
-
-        /**
-         * 获取设置的数据，当key未传递时，返回整个数据对象
-         * @param key 设置时的数据key
-         */
-        get<TReturnType=any>(key?: string): TReturnType
-        /**
-         * 设置数据
-         * @param data 数据对象，如{a:20,b:30}
-         * @param unchanged 指示哪些数据并没有变化的对象
-         */
-        set(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, ): this
-
-        /**
-         * 通过path获取值，path形如"data.list.2.name"字符串
-         * @param path 路径
-         */
-        //gain<TReturnType>(path: string): TReturnType
-
-        /**
-         * 检测数据变化，更新界面，放入数据后需要显式调用该方法才可以把数据更新到界面
-         * @param data 数据对象，如{a:20,b:30}
-         * @param unchanged 指示哪些数据并没有变化的对象
-         * @param resolve 完成更新后的回调
-         */
-        digest(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, resolve?: Function): void
-
-        /**
-         * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化
-         */
-        snapshot(): this
-
-        /**
-         * 检测数据是否有变动
-         */
-        altered(): boolean
-        /**
-         * 得到模板中@符号对应的原始数据
-         * @param data 数据对象
-         */
-        translate(data: object): object
-        /**
-         * 得到模板中@符号对应的原始数据
-         * @param origin 源字符串
-         */
-        parse(origin: string): object
-    }
-    /**
      * magix虚拟dom接口
      */
     interface MagixVDOM {
@@ -701,7 +650,6 @@ declare namespace Magix {
         /**
          * 更新界面对象
          */
-        readonly updater: Updater
         /**
          * 混入的当前View类原型链上的其它对象
          */
@@ -786,6 +734,44 @@ declare namespace Magix {
          */
         leaveTip(msg: string, hasChanged: () => boolean): void
 
+        /**
+         * 获取设置的数据，当key未传递时，返回整个数据对象
+         * @param key 设置时的数据key
+         */
+        get<TReturnType=any>(key?: string): TReturnType
+        /**
+         * 设置数据
+         * @param data 数据对象，如{a:20,b:30}
+         * @param unchanged 指示哪些数据并没有变化的对象
+         */
+        set(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, ): this
+        /**
+         * 检测数据变化，更新界面，放入数据后需要显式调用该方法才可以把数据更新到界面
+         * @param data 数据对象，如{a:20,b:30}
+         * @param unchanged 指示哪些数据并没有变化的对象
+         * @param resolve 完成更新后的回调
+         */
+        digest(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, resolve?: Function): void
+
+        /**
+         * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化
+         */
+        snapshot(): this
+
+        /**
+         * 检测数据是否有变动
+         */
+        altered(): boolean
+        /**
+         * 得到模板中@符号对应的原始数据
+         * @param data 数据对象
+         */
+        translate(data: object): object
+        /**
+         * 得到模板中@符号对应的原始数据
+         * @param origin 源字符串
+         */
+        parse(origin: string): object
         /**
          * view销毁时触发
          */
@@ -1033,6 +1019,19 @@ declare interface Magix {
      */
     guard<T extends object>(o: T): T
 
+    /**
+     * 触发事件
+     * @param node dom节点
+     * @param type 事件类型
+     * @param data 数据
+     */
+    fire(node: HTMLElement, type: string, data: any): void
+
+    /**
+     * 获取对象类型
+     * @param aim 目标对象
+     */
+    type(aim: any): string
     /**
      * 向页面追加样式
      * @param key 样式对应的唯一key，该key主要防止向页面反复添加同样的样式

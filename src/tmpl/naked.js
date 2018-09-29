@@ -1,4 +1,7 @@
-
+let G_Type = o => Object.prototype.toString.call(o).slice(8, -1);
+let G_IsType = type => o => G_Type(o) == type;
+let G_IsObject = G_IsType('Object');
+let G_IsArray = G_IsType('Array');
 let $ = selector => G_DOCUMENT.querySelectorAll(selector);
 let G_Trigger = (element, type, data) => {
     let e = G_DOCUMENT.createEvent('Events');
