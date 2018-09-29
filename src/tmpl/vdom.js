@@ -79,8 +79,8 @@ let V_CreateNode = (vnode, owner, ref) => {
     } else {
         c = G_DOCUMENT.createElementNS(V_NSMap[tag] || owner.namespaceURI, tag);
         V_SetAttributes(c, 0, vnode, ref);
-        for (tag of vnode['@{~v#node.children}']) {
-            c.appendChild(V_CreateNode(tag, owner, ref));
+        if (vnode['@{~v#node.html}']) {
+            c.innerHTML = vnode['@{~v#node.html}'];
         }
     }
     return c;
@@ -95,7 +95,8 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                 oldCount = oldChildren.length, newCount = newChildren.length,
                 reused = newVDOM['@{~v#node.reused}'],
                 nodes = realNode.childNodes, compareKey,
-                keyedNodes = {};
+                keyedNodes = {},
+                realIndex = 0;
             for (i = oldCount; i--;) {
                 oc = oldChildren[i];
                 compareKey = oc['@{~v#node.compare.key}'];
@@ -109,8 +110,8 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                 oc = oldChildren[i];
                 compareKey = keyedNodes[nc['@{~v#node.compare.key}']];
                 if (compareKey && (compareKey = compareKey.pop())) {
-                    while (compareKey != nodes[i]) {//如果找到的节点和当前不同，则移动
-                        realNode.appendChild(nodes[i]);
+                    while (compareKey != nodes[realIndex]) {//如果找到的节点和当前不同，则移动
+                        realNode.appendChild(nodes[realIndex]);
                         oldChildren.push(oldChildren[i]);
                         oldChildren.splice(i, 1);
                         oc = oldChildren[i];
@@ -118,17 +119,18 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                     if (reused[oc['@{~v#node.compare.key}']]) {
                         reused[oc['@{~v#node.compare.key}']]--;
                     }
-                    V_SetNode(nodes[i], realNode, oc, nc, ref, vframe, keys);
+                    V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
                 } else if (oc) {//有旧节点，则更新
                     if (keyedNodes[oc['@{~v#node.compare.key}']] &&
                         reused[oc['@{~v#node.compare.key}']]) {
                         oldChildren.splice(i, 0, nc);//插入一个占位符，在接下来的比较中才能一一对应
                         oldCount++;
                         ref.c = 1;
-                        ref.n.push([8, realNode, V_CreateNode(nc, realNode, ref), nodes[i]]);
+                        ref.n.push([8, realNode, V_CreateNode(nc, realNode, ref), nodes[realIndex]]);
+                        realIndex--;
                         // realNode.insertBefore(V_CreateNode(nc, realNode, ref), nodes[i]);
                     } else {
-                        V_SetNode(nodes[i], realNode, oc, nc, ref, vframe, keys);
+                        V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
                         //ref.c = 1;
                     }
                 } else {//添加新的节点
@@ -137,6 +139,7 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                     //realNode.appendChild(V_CreateNode(nc, realNode, ref));
                     ref.c = 1;
                 }
+                realIndex++;
             }
             for (i = newCount; i < oldCount; i++) {
                 oi = nodes[i];//删除多余的旧节点

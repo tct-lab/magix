@@ -102,7 +102,6 @@ let Body_FindVframeInfo = (current, eventType) => {
         }
         //if (selectorVfId != G_HashKey) { //从最近的vframe向上查找带有选择器事件的view
         //主要兼容服务端输出，不带id的情况
-        let findParent = match && !match.v;
         begin = current.id;
         if (Vframe_Vframes[begin]) {
             /*
@@ -147,15 +146,7 @@ let Body_FindVframeInfo = (current, eventType) => {
                     }
                 }
                 //防止跨view选中，到带模板的view时就中止或未指定
-                if (findParent) {
-                    if (match.v) {
-                        eventInfos.push({ ...match, v: selectorVfId });
-                    } else {
-                        match.v = selectorVfId;
-                    }
-                }
                 if (view.tmpl && !backtrace) {
-                    if (match && !match.v) match.v = selectorVfId;
                     break; //带界面的中止
                 }
                 backtrace = 0;

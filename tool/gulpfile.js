@@ -10,7 +10,7 @@ let ts = require('typescript');
 let customize = require('./customize');
 
 let type = 'cmd,module'; //打包kissy则type='kissy'
-let enableModules = 'style,viewInit,service,router,resource,viewMerge,tipRouter,updater,viewProtoMixins,base,defaultView,autoEndUpdate,linkage,updateTitleRouter,urlRewriteRouter,state,updaterDOM,viewInitAsync';
+let enableModules = 'style,viewInit,service,router,resource,viewMerge,viewProtoMixins,defaultView,autoEndUpdate,linkage,updateTitleRouter,urlRewriteRouter,updaterQuick';
 
 //let mini='style,naked,updater,updaterVDOM,updaterQuick,mini'
 //let enableModules = 'style,viewInit,router,viewMerge,tipRouter,updater,autoEndUpdate,linkage,state,updaterDOM,viewProtoMixins';

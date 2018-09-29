@@ -18,6 +18,9 @@ let Q_Create = (tag/*, views*/, children, props, unary) => {
             for (c of children) {
                 value = c['@{~v#node.outer.html}'];
                 if (c['@{~v#node.tag}'] == V_TEXT_NODE) {
+                    if (!value) {
+                        continue;
+                    }
                     value = Updater_Encode(value);
                 }
                 innerHTML += value;
