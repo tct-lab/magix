@@ -12,6 +12,7 @@ let modules = {
 
     updaterDOM: 1, //dom增量更新
     updaterQuick: 1,//quick
+    updaterAsync: 1,//
 
     service: 1, //接口服务
     serviceCombine: 1, //接口combine
@@ -28,7 +29,7 @@ let modules = {
     state: 1, //状态
     cnum: 1, //Cache num
     ceach: 1, //Cache each
-    
+
     viewProtoMixins: 1, //支持mixins
     defaultView: 1, //自动初始化
     //autoEndUpdate: 1, //自动识别并结束更新。针对没有tmpl属性的view自动识别并结束更新

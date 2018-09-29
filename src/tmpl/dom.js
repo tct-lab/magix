@@ -223,7 +223,11 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
             if (newKeyedNodes[nodeKey]) {
                 newKeyedNodes[nodeKey]--;
             }
+            /*#if(modules.updaterAsync){#*/
+            Async_AddTask(vframe, I_SetNode, foundNode, tempNew, oldParent, ref, vframe, keys);
+            /*#}else{#*/
             I_SetNode(foundNode, tempNew, oldParent, ref, vframe, keys);
+            /*#}#*/
         } else if (oldNode) {
             tempOld = oldNode;
             nodeKey = I_GetCompareKey(tempOld);
@@ -236,7 +240,11 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
                 //oldParent.insertBefore(tempNew, tempOld);
             } else {
                 oldNode = oldNode.nextSibling;
+                /*#if(modules.updaterAsync){#*/
+                Async_AddTask(vframe, I_SetNode, foundNode, tempNew, oldParent, ref, vframe, keys);
+                /*#}else{#*/
                 I_SetNode(tempOld, tempNew, oldParent, ref, vframe, keys);
+                /*#}#*/
             }
         } else {
             //I_LazyId(ref, tempNew);

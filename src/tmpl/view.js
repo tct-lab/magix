@@ -288,6 +288,95 @@ let Updater_EncodeURI = v => encodeURIComponent(Updater_Safeguard(v)).replace(Up
 
 let Updater_QR = /[\\'"]/g;
 let Updater_EncodeQ = v => Updater_Safeguard(v).replace(Updater_QR, '\\$&');
+
+/*#if(!modules.updaterAsync){#*/
+let Updater_Digest = (view, digesting) => {
+    let keys = updater['@{updater#keys}'],
+        changed = updater['@{updater#data.changed}'],
+        selfId = updater['@{updater#view.id}'],
+        vf = Vframe_Vframes[selfId],
+        view = vf && vf['@{vframe#view.entity}'],
+        ref = { d: [], v: [] },
+        node = G_GetById(selfId),
+        tmpl, vdom, data = updater['@{updater#data}'],
+        refData = updater['@{updater#ref.data}'],
+        redigest = trigger => {
+            if (digesting.i < digesting.length) {
+                Updater_Digest(updater, digesting);
+            } else {
+                ref = digesting.slice();
+                digesting.i = digesting.length = 0;
+                /*#if(!modules.mini){#*/
+                if (trigger) {
+                    view.fire('domready');
+                }
+                /*#}#*/
+                G_ToTry(ref);
+            }
+        };
+    digesting.i = digesting.length;
+    updater['@{updater#data.changed}'] = 0;
+    updater['@{updater#keys}'] = {};
+    if (changed &&
+        view &&
+        view['@{view#sign}'] > 0 &&
+        (tmpl = view.tmpl) && view['@{view#updater}'] == updater) {
+        //修正通过id访问到不同的对象
+        view.fire('dompatch');
+        delete Body_RangeEvents[selfId];
+        delete Body_RangeVframes[selfId];
+        console.time('[updater time:' + selfId + ']');
+        /*#if(modules.updaterVDOM){#*/
+        /*#if(modules.updaterQuick){#*/
+        vdom = tmpl(data, refData, Q_Create, selfId, Q_Encode, Q_Safeguard, Q_EncodeURI, Q_Ref, Q_EncodeQ/*, vfsToVNodes*/);
+        //Updater_VframesToVNodes[selfId] = vfsToVNodes.reverse();
+        /*#}else{#*/
+        vdom = TO_VDOM(tmpl(data, selfId, refData));
+        /*#}#*/
+        /*#}else{#*/
+        vdom = I_GetNode(tmpl(data, selfId, refData), node);
+        /*#}#*/
+        /*#if(modules.updaterVDOM){#*/
+        V_SetChildNodes(node, updater['@{updater#vdom}'], vdom, ref, vf, keys);
+        updater['@{updater#vdom}'] = vdom;
+        /*#}else{#*/
+        I_SetChildNodes(node, vdom, ref, vf, keys);
+        /*#}#*/
+        for (vdom of ref.d) {
+            vdom[0].id = vdom[1];
+        }
+
+        for (vdom of ref.v) {
+            vdom['@{view#render.short}']();
+        }
+        if (ref.c || !view['@{view#rendered}']) {
+            view.endUpdate(selfId);
+        }
+        /*#if(!modules.mini){#*/
+        if (ref.c) {
+            /*#if(modules.naked){#*/
+            G_Trigger(G_DOCUMENT, 'htmlchanged', {
+                vId: selfId
+            });
+            /*#}else if(modules.kissy){#*/
+            G_DOC.fire('htmlchanged', {
+                vId: selfId
+            });
+            /*#}else{#*/
+            G_DOC.trigger({
+                type: 'htmlchanged',
+                vId: selfId
+            });
+            /*#}#*/
+        }
+        /*#}#*/
+        console.timeEnd('[updater time:' + selfId + ']');
+        redigest(1);
+    } else {
+        redigest();
+    }
+};
+/*#}else{#*/
 let Updater_Digest = (view, digesting) => {
     let keys = view['@{view#updater.keys}'],
         changed = view['@{view#updater.data.changed}'],
@@ -369,6 +458,7 @@ let Updater_Digest = (view, digesting) => {
         redigest();
     }
 };
+/*#}#*/
 /**
  * View类
  * @name View
@@ -876,8 +966,9 @@ G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      * }
      */
     digest(data, unchanged, resolve) {
-        let me = this.set(data, unchanged),
-            digesting = me['@{view#updater.digesting.list}'];
+        let me = this.set(data, unchanged)/*#if(!modules.updaterAsync){#*/,
+            digesting = me['@{view#updater.digesting.list}']
+            /*#}#*/;
         /*
             view:
             <div>
@@ -893,6 +984,9 @@ G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
 
             如果在digest的过程中，多次调用自身的digest，则后续的进行排队。前面的执行完成后，排队中的一次执行完毕
         */
+        /*#if(modules.updaterAsync){#*/
+        Updater_Digest_Async(me, resolve);
+        /*#}else{#*/
         if (resolve) {
             digesting.push(resolve);
         }
@@ -901,6 +995,7 @@ G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
         } else if (DEBUG) {
             console.warn('Avoid redigest while updater is digesting');
         }
+        /*#}#*/
     }/*#if(!modules.mini){#*/,
     /**
      * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化

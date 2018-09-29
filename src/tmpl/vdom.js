@@ -113,7 +113,11 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                     if (reused[oc['@{~v#node.compare.key}']]) {
                         reused[oc['@{~v#node.compare.key}']]--;
                     }
+                    /*#if(modules.updaterAsync){#*/
+                    Async_AddTask(vframe, V_SetNode, nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                    /*#}else{#*/
                     V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                    /*#}#*/
                 } else if (oc) {//有旧节点，则更新
                     if (keyedNodes[oc['@{~v#node.compare.key}']] &&
                         reused[oc['@{~v#node.compare.key}']]) {
@@ -124,7 +128,11 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                         realIndex--;
                         // realNode.insertBefore(V_CreateNode(nc, realNode, ref), nodes[i]);
                     } else {
+                        /*#if(modules.updaterAsync){#*/
+                        Async_AddTask(vframe, V_SetNode, nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                        /*#}else{#*/
                         V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                        /*#}#*/
                         //ref.c = 1;
                     }
                 } else {//添加新的节点
