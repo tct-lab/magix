@@ -12,10 +12,7 @@ let modules = {
 
     updater: 1, //自动更新
     updaterDOM: 1, //dom增量更新
-    updaterVDOM: 1,//v-dom增量更新
     updaterQuick: 1,//quick
-    updaterAsync: 1,//异步更新界面
-    updaterTouchAttr: 1,//当attr变化时是否更新view
 
     service: 1, //接口服务
     serviceCombine: 1, //接口combine
@@ -35,10 +32,7 @@ let modules = {
 
     vframeHost: 1, //父子化同一个view中嵌套存在的vframe
     layerVframe: 1,//
-    collectView: 1, //收集同一个view中所有的子view并一次性发出请求，在请求combine时有用
     viewProtoMixins: 1, //支持mixins
-    //viewSlot: 1,//view支持slot
-    share: 1, //向子或孙view公开数据
     defaultView: 1, //自动初始化
     //autoEndUpdate: 1, //自动识别并结束更新。针对没有tmpl属性的view自动识别并结束更新
     linkage: 1, //vframe上是否带父子间调用的方法，通常在移动端并不需要
@@ -46,10 +40,7 @@ let modules = {
     viewInitAsync: 1,//init支持promise
     resource: 1, //资源管理
     configIni: 1, //是否有ini配置文件
-    nodeAttachVframe: 1, //节点上挂vframe对象
     viewMerge: 1, //view是否提供merge方法供扩展原型链对象
-    keepHTML: 1, //保留html
-    naked: 1,//原生实现
     viewChildren: 1,//是否可以序列化子节点
     dispatcherRecast: 1//渲染拦截
 };

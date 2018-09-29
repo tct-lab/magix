@@ -7,14 +7,113 @@ author:kooboy_li@163.com
 loader:cmd
 enables:style,viewInit,service,ceach,router,resource,configIni,nodeAttachVframe,viewMerge,tipRouter,updater,viewProtoMixins,base,defaultView,autoEndUpdate,linkage,updateTitleRouter,urlRewriteRouter,state,updaterDOM,viewInitAsync
 
-optionals:updaterVDOM,updaterQuick,updaterAsync,updaterTouchAttr,serviceCombine,servicePush,tipLockUrlRouter,edgeRouter,forceEdgeRouter,cnum,vframeHost,layerVframe,collectView,share,keepHTML,naked,viewChildren,dispatcherRecast
+optionals:updaterQuick,serviceCombine,servicePush,tipLockUrlRouter,edgeRouter,forceEdgeRouter,cnum,vframeHost,layerVframe,viewChildren,dispatcherRecast
 */
-define('magix', ['$'], function (require) {
+define('magix', function () {
     if (typeof DEBUG == 'undefined')
         window.DEBUG = true;
-    var $ = require('$');
-    var G_IsObject = $.isPlainObject;
-    var G_IsArray = $.isArray;
+    var G_Type = function (o) { return Object.prototype.toString.call(o).slice(8, -1); };
+    var G_IsType = function (type) { return function (o) { return G_Type(o) == type; }; };
+    var G_IsObject = G_IsType('Object');
+    var G_IsArray = G_IsType('Array');
+    var $ = function (selector) { return G_DOCUMENT.querySelectorAll(selector); };
+    var G_Trigger = function (element, type, data) {
+        var e = G_DOCUMENT.createEvent('Events');
+        e.initEvent(type, true, true);
+        for (var p in data) {
+            e[p] = data[p];
+        }
+        element.dispatchEvent(e);
+    };
+    var G_TargetMatchSelector = function (element, selector) {
+        if (!selector || !element || element.nodeType !== 1)
+            return 0;
+        var matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||
+            element.oMatchesSelector || element.matchesSelector;
+        return matchesSelector.call(element, selector);
+    };
+    var G_MxId = function (e) { return e._mx || (e._mx = G_Id('e')); };
+    var G_EventHandlers = {};
+    var returnTrue = function () { return true; }, returnFalse = function () { return false; }, eventMethods = {
+        preventDefault: 'isDefaultPrevented',
+        //stopImmediatePropagation: 'isImmediatePropagationStopped',
+        stopPropagation: 'isPropagationStopped'
+    };
+    var G_EventCompatible = function (e) {
+        if (!e.isDefaultPrevented) {
+            var _loop_1 = function (key) {
+                var value = eventMethods[key];
+                var src = e[key];
+                e[key] = function () {
+                    var a = [];
+                    for (var _i = 0; _i < arguments.length; _i++) {
+                        a[_i] = arguments[_i];
+                    }
+                    e[value] = returnTrue;
+                    return src && src.apply(e, a);
+                };
+                e[value] = returnFalse;
+            };
+            for (var key in eventMethods) {
+                _loop_1(key);
+            }
+            if (e.defaultPrevented !== undefined ? e.defaultPrevented :
+                'returnValue' in e ? e.returnValue === false :
+                    e.getPreventDefault && e.getPreventDefault())
+                e.isDefaultPrevented = returnTrue;
+        }
+        return e;
+    };
+    var G_AddEvent = function (element, type, data, fn) {
+        var id = G_MxId(element);
+        var collections = G_EventHandlers[id] || (G_EventHandlers[id] = []);
+        var h = {
+            'a': data && data.i,
+            'b': fn,
+            'c': type,
+            'd': function (e) {
+                e = G_EventCompatible(e);
+                //if (e.isImmediatePropagationStopped()) return;
+                fn.call(element, e, data);
+            }
+        };
+        collections.push(h);
+        element.addEventListener(type, h['d'], data && data.m);
+    };
+    var G_RemoveEvent = function (element, type, data, cb) {
+        var id = G_MxId(element);
+        var collections = G_EventHandlers[id];
+        if (collections) {
+            var found = void 0;
+            for (var c = void 0, i = collections.length; i--;) {
+                c = collections[i];
+                if (c['c'] == type && c['b'] === cb) {
+                    var cd = c['a'];
+                    if (!data || (data && data.i == cd)) {
+                        found = c;
+                        collections.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+            if (found) {
+                element.removeEventListener(type, found['d'], data && data.m);
+            }
+        }
+    };
+    var G_DOMGlobalProcessor = function (e, d) {
+        //d = e.data;
+        e.eventTarget = d.e;
+        G_ToTry(d.f, e, d.v);
+    };
+    var G_DOMEventLibBind = function (node, type, cb, remove, scope) {
+        if (remove) {
+            G_RemoveEvent(node, type, scope, cb);
+        }
+        else {
+            G_AddEvent(node, type, scope, cb);
+        }
+    };
     var G_COUNTER = 0;
     var G_EMPTY = '';
     var G_EMPTY_ARRAY = [];
@@ -334,24 +433,6 @@ define('magix', ['$'], function (require) {
         cProto.constructor = ctor;
         ctor[G_PROTOTYPE] = cProto;
         return ctor;
-    };
-    var G_SelectorEngine = $.find || $.zepto;
-    var G_TargetMatchSelector = G_SelectorEngine.matchesSelector || G_SelectorEngine.matches;
-    var G_DOMGlobalProcessor = function (e, d) {
-        d = e.data;
-        e.eventTarget = d.e;
-        G_ToTry(d.f, e, d.v);
-    };
-    var G_DOMEventLibBind = function (node, type, cb, remove, scope) {
-        if (scope) {
-            type += "." + scope.i;
-        }
-        if (remove) {
-            $(node).off(type, cb);
-        }
-        else {
-            $(node).on(type, scope, cb);
-        }
     };
     var Safeguard = function (data) { return data; };
     if (DEBUG && window.Proxy) {
@@ -1198,7 +1279,6 @@ define('magix', ['$'], function (require) {
      */
     );
     Magix.State = State;
-    //let G_IsFunction = $.isFunction;
     var Router_VIEW = 'view';
     var Router_HrefCache = new G_Cache();
     var Router_ChgdCache = new G_Cache();
@@ -2109,15 +2189,6 @@ define('magix', ['$'], function (require) {
      *
      *      fca firstChildrenAlter  fcc firstChildrenCreated
      */
-    $.fn.invokeView = function (name, args) {
-        var returned = [], e, vf;
-        for (var _i = 0, _a = this; _i < _a.length; _i++) {
-            e = _a[_i];
-            vf = e.vframe;
-            returned.push(vf && vf.invoke(name, args));
-        }
-        return returned;
-    };
     /*
     dom event处理思路
 
@@ -2512,6 +2583,24 @@ define('magix', ['$'], function (require) {
             }
         }
     };
+    var I_AttrDiff = function (oldNode, newNode) {
+        var oldAttributes = oldNode.attributes, newAttributes = newNode.attributes, diff = false, i = newAttributes.length, a, b, name;
+        if (oldAttributes.length == i) {
+            for (; i--;) {
+                a = newAttributes[i];
+                name = a.name;
+                b = oldAttributes[name];
+                if (!b || a[G_VALUE] != b[G_VALUE]) {
+                    diff = true;
+                    break;
+                }
+            }
+        }
+        else {
+            diff = true;
+        }
+        return diff;
+    };
     var I_SpecialDiff = function (oldNode, newNode) {
         var nodeName = oldNode.nodeName, i;
         var specials = I_Specials[nodeName];
@@ -2562,13 +2651,6 @@ define('magix', ['$'], function (require) {
                 nodeKey.push(oldNode);
             }
             oldNode = oldNode.previousSibling;
-            // if (newNode) {
-            //     nodeKey = I_GetCompareKey(newNode);
-            //     if (nodeKey) {
-            //         newKeyedNodes[nodeKey] = 1;
-            //     }
-            //     newNode = newNode.nextSibling;
-            // }
         }
         while (newNode) {
             nodeKey = I_GetCompareKey(newNode);
@@ -2578,7 +2660,6 @@ define('magix', ['$'], function (require) {
             newNode = newNode.nextSibling;
         }
         newNode = newParent.firstChild;
-        //removed = newParent.childNodes.length < extra;
         oldNode = oldParent.firstChild;
         while (newNode) {
             extra--;
@@ -2596,16 +2677,6 @@ define('magix', ['$'], function (require) {
                 if (newKeyedNodes[nodeKey]) {
                     newKeyedNodes[nodeKey]--;
                 }
-                // if (foundNode != oldNode) {//如果找到的节点和当前不同，则移动
-                //     if (removed && oldNode.nextSibling == foundNode) {
-                //         oldParent.appendChild(oldNode);
-                //         oldNode = foundNode.nextSibling;
-                //     } else {
-                //         oldParent.insertBefore(foundNode, oldNode);
-                //     }
-                // } else {
-                //     oldNode = oldNode.nextSibling;
-                // }
                 I_SetNode(foundNode, tempNew, oldParent, ref, vframe, keys);
             }
             else if (oldNode) {
@@ -2621,7 +2692,6 @@ define('magix', ['$'], function (require) {
                 }
                 else {
                     oldNode = oldNode.nextSibling;
-                    // Otherwise we diff the two non-keyed nodes.
                     I_SetNode(tempOld, tempNew, oldParent, ref, vframe, keys);
                 }
             }
@@ -2676,34 +2746,15 @@ define('magix', ['$'], function (require) {
                     // If we have the same nodename then we can directly update the attributes.
                     var newMxView = newNode.getAttribute(G_MX_VIEW), newHTML = newNode.innerHTML;
                     var newStaticAttrKey = newNode.getAttribute(G_Tag_Attr_Key);
-                    var updateAttribute = !newStaticAttrKey || newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key), updateChildren = void 0, unmountOld = void 0, oldVf = Vframe_Vframes[oldNode.id], assign = void 0, view = void 0, uri = newMxView && G_ParseUri(newMxView), params = void 0, htmlChanged = void 0, paramsChanged = void 0;
+                    var updateAttribute = newStaticAttrKey ? newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key) : I_AttrDiff(oldNode, newNode), updateChildren = void 0, unmountOld = void 0, oldVf = Vframe_Vframes[oldNode.id], assign = void 0, view = void 0, uri = newMxView && G_ParseUri(newMxView), params = void 0, htmlChanged = void 0, paramsChanged = void 0;
                     if (newMxView && oldVf &&
                         (!newNode.id || newNode.id == oldNode.id) &&
                         oldVf['$j'] == uri[G_PATH] &&
                         (view = oldVf['$v'])) {
                         htmlChanged = newHTML != oldVf['$i'];
                         paramsChanged = newMxView != oldVf[G_PATH];
-                        assign = oldNode.getAttribute(G_Tag_View_Key);
-                        //如果组件内html没改变，参数也没改变
-                        //我们要检测引用参数是否发生了改变
-                        if (!htmlChanged && !paramsChanged && assign) {
-                            //对于mxv属性，带value的必定是组件
-                            //所以对组件，我们只检测参数与html，所以组件的hasMXV=0
-                            hasMXV = 0;
-                            params = assign.split(G_COMMA);
-                            for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
-                                assign = params_1[_i];
-                                //支持模板内使用this获取整个数据对象
-                                //如果使用this来传递数据，我们把this的key处理成#号
-                                //遇到#号则任意的数据改变都需要更新当前这个组件
-                                if (assign == G_HashKey || G_Has(keys, assign)) {
-                                    paramsChanged = 1;
-                                    break;
-                                }
-                            }
-                        }
                         //目前属性变化并不更新view,如果要更新，只需要再判断下updateAttribute即可
-                        if (paramsChanged || htmlChanged || hasMXV) {
+                        if (paramsChanged || htmlChanged || hasMXV || updateAttribute) {
                             assign = view['$e'] && view['$f'];
                             if (assign) {
                                 params = uri[G_PARAMS];
@@ -3736,7 +3787,6 @@ define('magix', ['$'], function (require) {
          */
     });
     Magix.View = View;
-    var G_Type = $.type;
     var G_Now = Date.now;
     /*
     一个请求send后，应该取消吗？

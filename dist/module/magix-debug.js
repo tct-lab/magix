@@ -7,13 +7,106 @@ author:kooboy_li@163.com
 loader:module
 enables:style,viewInit,service,ceach,router,resource,configIni,nodeAttachVframe,viewMerge,tipRouter,updater,viewProtoMixins,base,defaultView,autoEndUpdate,linkage,updateTitleRouter,urlRewriteRouter,state,updaterDOM,viewInitAsync
 
-optionals:updaterVDOM,updaterQuick,updaterAsync,updaterTouchAttr,serviceCombine,servicePush,tipLockUrlRouter,edgeRouter,forceEdgeRouter,cnum,vframeHost,layerVframe,collectView,share,keepHTML,naked,viewChildren,dispatcherRecast
+optionals:updaterQuick,serviceCombine,servicePush,tipLockUrlRouter,edgeRouter,forceEdgeRouter,cnum,vframeHost,layerVframe,viewChildren,dispatcherRecast
 */
 if (typeof DEBUG == 'undefined') window.DEBUG = true;
 let G_Type = o => Object.prototype.toString.call(o).slice(8, -1);
 let G_IsType = type => o => G_Type(o) == type;
 let G_IsObject = G_IsType('Object');
 let G_IsArray = G_IsType('Array');
+
+let $ = selector => G_DOCUMENT.querySelectorAll(selector);
+let G_Trigger = (element, type, data) => {
+    let e = G_DOCUMENT.createEvent('Events');
+    e.initEvent(type, true, true);
+    for (let p in data) {
+        e[p] = data[p];
+    }
+    element.dispatchEvent(e);
+};
+let G_TargetMatchSelector = (element, selector) => {
+    if (!selector || !element || element.nodeType !== 1) return 0;
+    let matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||
+        element.oMatchesSelector || element.matchesSelector;
+    return matchesSelector.call(element, selector);
+};
+let G_MxId = e => e._mx || (e._mx = G_Id('e'));
+let G_EventHandlers = {};
+let returnTrue = () => true,
+    returnFalse = () => false,
+    eventMethods = {
+        preventDefault: 'isDefaultPrevented',
+        //stopImmediatePropagation: 'isImmediatePropagationStopped',
+        stopPropagation: 'isPropagationStopped'
+    };
+
+let G_EventCompatible = e => {
+    if (!e.isDefaultPrevented) {
+        for (let key in eventMethods) {
+            let value = eventMethods[key];
+            let src = e[key];
+            e[key] = (...a) => {
+                e[value] = returnTrue;
+                return src && src.apply(e, a);
+            };
+            e[value] = returnFalse;
+        }
+        if (e.defaultPrevented !== undefined ? e.defaultPrevented :
+            'returnValue' in e ? e.returnValue === false :
+                e.getPreventDefault && e.getPreventDefault())
+            e.isDefaultPrevented = returnTrue;
+    }
+    return e;
+};
+let G_AddEvent = (element, type, data, fn) => {
+    let id = G_MxId(element);
+    let collections = G_EventHandlers[id] || (G_EventHandlers[id] = []);
+    let h = {
+        'a': data && data.i,
+        'b': fn,
+        'c': type,
+        'd'(e) {
+            e = G_EventCompatible(e);
+            //if (e.isImmediatePropagationStopped()) return;
+            fn.call(element, e, data);
+        }
+    };
+    collections.push(h);
+    element.addEventListener(type, h['d'], data && data.m);
+};
+let G_RemoveEvent = (element, type, data, cb) => {
+    let id = G_MxId(element);
+    let collections = G_EventHandlers[id];
+    if (collections) {
+        let found;
+        for (let c, i = collections.length; i--;) {
+            c = collections[i];
+            if (c['c'] == type && c['b'] === cb) {
+                let cd = c['a'];
+                if (!data || (data && data.i == cd)) {
+                    found = c;
+                    collections.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        if (found) {
+            element.removeEventListener(type, found['d'], data && data.m);
+        }
+    }
+};
+let G_DOMGlobalProcessor = (e, d) => {
+    //d = e.data;
+    e.eventTarget = d.e;
+    G_ToTry(d.f, e, d.v);
+};
+let G_DOMEventLibBind = (node, type, cb, remove, scope) => {
+    if (remove) {
+        G_RemoveEvent(node, type, scope, cb);
+    } else {
+        G_AddEvent(node, type, scope, cb);
+    }
+};
 let G_COUNTER = 0;
 let G_EMPTY = '';
 let G_EMPTY_ARRAY = [];
@@ -352,99 +445,6 @@ let G_Extend = (ctor, base, props, statics, cProto) => {
     cProto.constructor = ctor;
     ctor[G_PROTOTYPE] = cProto;
     return ctor;
-};
-
-let $ = selector => G_DOCUMENT.querySelectorAll(selector);
-let G_Trigger = (element, type, data) => {
-    let e = G_DOCUMENT.createEvent('Events');
-    e.initEvent(type, true, true);
-    for (let p in data) {
-        e[p] = data[p];
-    }
-    element.dispatchEvent(e);
-};
-let G_TargetMatchSelector = (element, selector) => {
-    if (!selector || !element || element.nodeType !== 1) return 0;
-    let matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||
-        element.oMatchesSelector || element.matchesSelector;
-    return matchesSelector.call(element, selector);
-};
-let G_MxId = e => e._mx || (e._mx = G_Id('e'));
-let G_EventHandlers = {};
-let returnTrue = () => true,
-    returnFalse = () => false,
-    eventMethods = {
-        preventDefault: 'isDefaultPrevented',
-        //stopImmediatePropagation: 'isImmediatePropagationStopped',
-        stopPropagation: 'isPropagationStopped'
-    };
-
-let G_EventCompatible = e => {
-    if (!e.isDefaultPrevented) {
-        for (let key in eventMethods) {
-            let value = eventMethods[key];
-            let src = e[key];
-            e[key] = (...a) => {
-                e[value] = returnTrue;
-                return src && src.apply(e, a);
-            };
-            e[value] = returnFalse;
-        }
-        if (e.defaultPrevented !== undefined ? e.defaultPrevented :
-            'returnValue' in e ? e.returnValue === false :
-                e.getPreventDefault && e.getPreventDefault())
-            e.isDefaultPrevented = returnTrue;
-    }
-    return e;
-};
-let G_AddEvent = (element, type, data, fn) => {
-    let id = G_MxId(element);
-    let collections = G_EventHandlers[id] || (G_EventHandlers[id] = []);
-    let h = {
-        'a': data && data.i,
-        'b': fn,
-        'c': type,
-        'd'(e) {
-            e = G_EventCompatible(e);
-            //if (e.isImmediatePropagationStopped()) return;
-            fn.call(element, e, data);
-        }
-    };
-    collections.push(h);
-    element.addEventListener(type, h['d'], data && data.m);
-};
-let G_RemoveEvent = (element, type, data, cb) => {
-    let id = G_MxId(element);
-    let collections = G_EventHandlers[id];
-    if (collections) {
-        let found;
-        for (let c, i = collections.length; i--;) {
-            c = collections[i];
-            if (c['c'] == type && c['b'] === cb) {
-                let cd = c['a'];
-                if (!data || (data && data.i == cd)) {
-                    found = c;
-                    collections.splice(i, 1);
-                    break;
-                }
-            }
-        }
-        if (found) {
-            element.removeEventListener(type, found['d'], data && data.m);
-        }
-    }
-};
-let G_DOMGlobalProcessor = (e, d) => {
-    //d = e.data;
-    e.eventTarget = d.e;
-    G_ToTry(d.f, e, d.v);
-};
-let G_DOMEventLibBind = (node, type, cb, remove, scope) => {
-    if (remove) {
-        G_RemoveEvent(node, type, scope, cb);
-    } else {
-        G_AddEvent(node, type, scope, cb);
-    }
 };
 let Safeguard = data => data;
 if (DEBUG && window.Proxy) {
@@ -1327,7 +1327,6 @@ let State = {
 Magix.State = State;
 
 
-//let G_IsFunction = $.isFunction;
 let Router_VIEW = 'view';
 let Router_HrefCache = new G_Cache();
 let Router_ChgdCache = new G_Cache();
@@ -1741,7 +1740,6 @@ let Dispatcher_NotifyChange = (e, vf, view) => {
         }
         
 };
-
 
 let Vframe_RootVframe;
 let Vframe_GlobalAlter;
@@ -2634,7 +2632,6 @@ let Body_DOMEventBind = (type, searchSelector, remove) => {
 
 
 
-
 /*
 2017.8.1
     直接应用节点对比方案，需要解决以下问题
@@ -2764,7 +2761,25 @@ let I_SetAttributes = (oldNode, newNode, ref, keepId) => {
         }
     }
 };
-
+let I_AttrDiff = (oldNode, newNode) => {
+    let oldAttributes = oldNode.attributes,
+        newAttributes = newNode.attributes,
+        diff = false, i = newAttributes.length, a, b, name;
+    if (oldAttributes.length == i) {
+        for (; i--;) {
+            a = newAttributes[i];
+            name = a.name;
+            b = oldAttributes[name];
+            if (!b || a[G_VALUE] != b[G_VALUE]) {
+                diff = true;
+                break;
+            }
+        }
+    } else {
+        diff = true;
+    }
+    return diff;
+};
 let I_SpecialDiff = (oldNode, newNode) => {
     let nodeName = oldNode.nodeName, i;
     let specials = I_Specials[nodeName];
@@ -2816,13 +2831,6 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
             nodeKey.push(oldNode);
         }
         oldNode = oldNode.previousSibling;
-        // if (newNode) {
-        //     nodeKey = I_GetCompareKey(newNode);
-        //     if (nodeKey) {
-        //         newKeyedNodes[nodeKey] = 1;
-        //     }
-        //     newNode = newNode.nextSibling;
-        // }
     }
     while (newNode) {
         nodeKey = I_GetCompareKey(newNode);
@@ -2832,7 +2840,6 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
         newNode = newNode.nextSibling;
     }
     newNode = newParent.firstChild;
-    //removed = newParent.childNodes.length < extra;
     oldNode = oldParent.firstChild;
     while (newNode) {
         extra--;
@@ -2850,19 +2857,7 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
             if (newKeyedNodes[nodeKey]) {
                 newKeyedNodes[nodeKey]--;
             }
-            // if (foundNode != oldNode) {//如果找到的节点和当前不同，则移动
-            //     if (removed && oldNode.nextSibling == foundNode) {
-            //         oldParent.appendChild(oldNode);
-            //         oldNode = foundNode.nextSibling;
-            //     } else {
-            //         oldParent.insertBefore(foundNode, oldNode);
-            //     }
-            // } else {
-            //     oldNode = oldNode.nextSibling;
-            // }
-            
             I_SetNode(foundNode, tempNew, oldParent, ref, vframe, keys);
-            
         } else if (oldNode) {
             tempOld = oldNode;
             nodeKey = I_GetCompareKey(tempOld);
@@ -2875,10 +2870,7 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
                 oldParent.insertBefore(tempNew, tempOld);
             } else {
                 oldNode = oldNode.nextSibling;
-                // Otherwise we diff the two non-keyed nodes.
-                
                 I_SetNode(tempOld, tempNew, oldParent, ref, vframe, keys);
-                
             }
         } else {
             //I_LazyId(ref, tempNew);
@@ -2934,11 +2926,8 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
 
                 let newMxView = newNode.getAttribute(G_MX_VIEW),
                     newHTML = newNode.innerHTML;
-                
                 let newStaticAttrKey = newNode.getAttribute(G_Tag_Attr_Key);
-                
-                let updateAttribute =
-                !newStaticAttrKey || newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key),
+                let updateAttribute = newStaticAttrKey ? newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key) : I_AttrDiff(oldNode, newNode),
                     updateChildren, unmountOld,
                     oldVf = Vframe_Vframes[oldNode.id],
                     assign,
@@ -2952,27 +2941,8 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
                     (view = oldVf['$v'])) {
                     htmlChanged = newHTML != oldVf['$i'];
                     paramsChanged = newMxView != oldVf[G_PATH];
-                    assign = oldNode.getAttribute(G_Tag_View_Key);
-                    //如果组件内html没改变，参数也没改变
-                    //我们要检测引用参数是否发生了改变
-                    if (!htmlChanged && !paramsChanged && assign) {
-                        //对于mxv属性，带value的必定是组件
-                        //所以对组件，我们只检测参数与html，所以组件的hasMXV=0
-                        hasMXV = 0;
-                        params = assign.split(G_COMMA);
-                        
-                        for (assign of params) {
-                            //支持模板内使用this获取整个数据对象
-                            //如果使用this来传递数据，我们把this的key处理成#号
-                            //遇到#号则任意的数据改变都需要更新当前这个组件
-                            if (assign == G_HashKey || G_Has(keys, assign) ) {
-                                paramsChanged = 1;
-                                break;
-                            }
-                        }
-                    }
                     //目前属性变化并不更新view,如果要更新，只需要再判断下updateAttribute即可
-                    if (paramsChanged || htmlChanged || hasMXV) {
+                    if (paramsChanged || htmlChanged || hasMXV || updateAttribute) {
                         assign = view['$e'] && view['$f'];
                         if (assign) {
                             params = uri[G_PARAMS];

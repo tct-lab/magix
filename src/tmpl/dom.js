@@ -127,7 +127,6 @@ let I_SetAttributes = (oldNode, newNode, ref, keepId) => {
         }
     }
 };
-/*#if(modules.updaterTouchAttr){#*/
 let I_AttrDiff = (oldNode, newNode) => {
     let oldAttributes = oldNode.attributes,
         newAttributes = newNode.attributes,
@@ -147,7 +146,6 @@ let I_AttrDiff = (oldNode, newNode) => {
     }
     return diff;
 };
-/*#}#*/
 let I_SpecialDiff = (oldNode, newNode) => {
     let nodeName = oldNode.nodeName, i;
     let specials = I_Specials[nodeName];
@@ -199,13 +197,6 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
             nodeKey.push(oldNode);
         }
         oldNode = oldNode.previousSibling;
-        // if (newNode) {
-        //     nodeKey = I_GetCompareKey(newNode);
-        //     if (nodeKey) {
-        //         newKeyedNodes[nodeKey] = 1;
-        //     }
-        //     newNode = newNode.nextSibling;
-        // }
     }
     while (newNode) {
         nodeKey = I_GetCompareKey(newNode);
@@ -215,7 +206,6 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
         newNode = newNode.nextSibling;
     }
     newNode = newParent.firstChild;
-    //removed = newParent.childNodes.length < extra;
     oldNode = oldParent.firstChild;
     while (newNode) {
         extra--;
@@ -233,21 +223,7 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
             if (newKeyedNodes[nodeKey]) {
                 newKeyedNodes[nodeKey]--;
             }
-            // if (foundNode != oldNode) {//如果找到的节点和当前不同，则移动
-            //     if (removed && oldNode.nextSibling == foundNode) {
-            //         oldParent.appendChild(oldNode);
-            //         oldNode = foundNode.nextSibling;
-            //     } else {
-            //         oldParent.insertBefore(foundNode, oldNode);
-            //     }
-            // } else {
-            //     oldNode = oldNode.nextSibling;
-            // }
-            /*#if(modules.updaterAsync){#*/
-            Async_AddTask(vframe, I_SetNode, foundNode, tempNew, oldParent, ref, vframe, keys);
-            /*#}else{#*/
             I_SetNode(foundNode, tempNew, oldParent, ref, vframe, keys);
-            /*#}#*/
         } else if (oldNode) {
             tempOld = oldNode;
             nodeKey = I_GetCompareKey(tempOld);
@@ -260,12 +236,7 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
                 oldParent.insertBefore(tempNew, tempOld);
             } else {
                 oldNode = oldNode.nextSibling;
-                // Otherwise we diff the two non-keyed nodes.
-                /*#if(modules.updaterAsync){#*/
-                Async_AddTask(vframe, I_SetNode, tempOld, tempNew, oldParent, ref, vframe, keys);
-                /*#}else{#*/
                 I_SetNode(tempOld, tempNew, oldParent, ref, vframe, keys);
-                /*#}#*/
             }
         } else {
             //I_LazyId(ref, tempNew);
@@ -321,11 +292,8 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
 
                 let newMxView = newNode.getAttribute(G_MX_VIEW),
                     newHTML = newNode.innerHTML;
-                /*#if(!modules.updaterTouchAttr){#*/
                 let newStaticAttrKey = newNode.getAttribute(G_Tag_Attr_Key);
-                /*#}#*/
-                let updateAttribute =/*#if(modules.updaterTouchAttr){#*/ I_AttrDiff(oldNode, newNode)/*#}else{#*/
-                !newStaticAttrKey || newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key)/*#}#*/,
+                let updateAttribute = newStaticAttrKey ? newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key) : I_AttrDiff(oldNode, newNode),
                     updateChildren, unmountOld,
                     oldVf = Vframe_Vframes[oldNode.id],
                     assign,
@@ -339,34 +307,13 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
                     (view = oldVf['@{vframe#view.entity}'])) {
                     htmlChanged = newHTML != oldVf['@{vframe#template}'];
                     paramsChanged = newMxView != oldVf[G_PATH];
-                    assign = oldNode.getAttribute(G_Tag_View_Key);
-                    //如果组件内html没改变，参数也没改变
-                    //我们要检测引用参数是否发生了改变
-                    if (!htmlChanged && !paramsChanged && assign) {
-                        //对于mxv属性，带value的必定是组件
-                        //所以对组件，我们只检测参数与html，所以组件的hasMXV=0
-                        hasMXV = 0;
-                        params = assign.split(G_COMMA);
-                        /*#if(modules.vframeHost){#*/
-                        newStaticAttrKey = Updater_ChangedKeys[oldVf.hId || oldVf.pId];
-                        /*#}#*/
-                        for (assign of params) {
-                            //支持模板内使用this获取整个数据对象
-                            //如果使用this来传递数据，我们把this的key处理成#号
-                            //遇到#号则任意的数据改变都需要更新当前这个组件
-                            if (assign == G_HashKey || G_Has(keys, assign) /*#if(modules.vframeHost){#*/ || G_Has(newStaticAttrKey, assign)/*#}#*/) {
-                                paramsChanged = 1;
-                                break;
-                            }
-                        }
-                    }
                     //目前属性变化并不更新view,如果要更新，只需要再判断下updateAttribute即可
-                    if (paramsChanged || htmlChanged || hasMXV/*#if(modules.updaterTouchAttr){#*/ || updateAttribute/*#}#*/) {
+                    if (paramsChanged || htmlChanged || hasMXV || updateAttribute) {
                         assign = view['@{view#rendered}'] && view['@{view#assign.fn}'];
                         if (assign) {
                             params = uri[G_PARAMS];
                             //处理引用赋值
-                            /*#if(modules.viewChildren){#*/newStaticAttrKey = /*#}#*/Vframe_TranslateQuery(/*#if(modules.vframeHost){#*/oldVf.hId ||/*#}#*/oldVf.pId, newMxView, params);
+                            /*#if(modules.viewChildren){#*/newStaticAttrKey = /*#}#*/Vframe_TranslateQuery(oldVf.hId || oldVf.pId, newMxView, params);
                             oldVf['@{vframe#template}'] = newHTML;
                             //oldVf['@{vframe#data.stringify}'] = newDataStringify;
                             oldVf[G_PATH] = newMxView;//update ref

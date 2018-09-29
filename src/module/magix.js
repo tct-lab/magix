@@ -3,6 +3,7 @@ let G_Type = o => Object.prototype.toString.call(o).slice(8, -1);
 let G_IsType = type => o => G_Type(o) == type;
 let G_IsObject = G_IsType('Object');
 let G_IsArray = G_IsType('Array');
+Inc('../tmpl/naked');
 Inc('../tmpl/variable');
 Inc('../tmpl/cache');
 /*#if(modules.defaultView){#*/
@@ -50,7 +51,6 @@ let G_Require = (name, fn) => {
     }
 };
 Inc('../tmpl/extend');
-Inc('../tmpl/naked');
 Inc('../tmpl/safeguard');
 Inc('../tmpl/magix');
 Inc('../tmpl/event');
@@ -58,14 +58,10 @@ Inc('../tmpl/event');
 Inc('../tmpl/state');
 /*#}#*/
 /*#if(modules.router){#*/
-//let G_IsFunction = $.isFunction;
 Inc('../tmpl/router');
 /*#}#*/
 /*#if(modules.router||modules.state){#*/
 Inc('../tmpl/dispatcher');
-/*#}#*/
-/*#if(modules.updater&&modules.updaterAsync){#*/
-Inc('../tmpl/async');
 /*#}#*/
 Inc('../tmpl/vframe');
 Inc('../tmpl/body');
@@ -73,15 +69,8 @@ Inc('../tmpl/body');
 Inc('../tmpl/children');
 /*#}#*/
 /*#if(modules.updater){#*/
-/*#if(!modules.updaterVDOM&&!modules.updaterDOM){#*/
-Inc('../tmpl/tmpl');
-/*#}#*/
-/*#if(modules.updaterVDOM){#*/
 /*#if(modules.updaterQuick){#*/
 Inc('../tmpl/quick');
-/*#}else{#*/
-Inc('../tmpl/tovdom');
-/*#}#*/
 Inc('../tmpl/vdom');
 /*#}else if(modules.updaterDOM){#*/
 Inc('../tmpl/dom');

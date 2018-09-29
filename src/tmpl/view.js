@@ -269,6 +269,121 @@ let View_IsObserveChanged = view => {
     return res;
 };
 /*#}#*/
+
+let Updater_EM = {
+    '&': 'amp',
+    '<': 'lt',
+    '>': 'gt',
+    '"': '#34',
+    '\'': '#39',
+    '\`': '#96'
+};
+let Updater_ER = /[&<>"'\`]/g;
+let Updater_Safeguard = v => '' + (v == null ? '' : v);
+let Updater_EncodeReplacer = m => `&${Updater_EM[m]};`;
+let Updater_Encode = v => Updater_Safeguard(v).replace(Updater_ER, Updater_EncodeReplacer);
+
+let Updater_Ref = ($$, v, k, f) => {
+    for (f = $$[G_SPLITER]; --f;)
+        if ($$[k = G_SPLITER + f] === v) return k;
+    $$[k = G_SPLITER + $$[G_SPLITER]++] = v;
+    return k;
+};
+let Updater_UM = {
+    '!': '%21',
+    '\'': '%27',
+    '(': '%28',
+    ')': '%29',
+    '*': '%2A'
+};
+let Updater_URIReplacer = m => Updater_UM[m];
+let Updater_URIReg = /[!')(*]/g;
+let Updater_EncodeURI = v => encodeURIComponent(Updater_Safeguard(v)).replace(Updater_URIReg, Updater_URIReplacer);
+
+let Updater_QR = /[\\'"]/g;
+let Updater_EncodeQ = v => Updater_Safeguard(v).replace(Updater_QR, '\\$&');
+let Updater_ChangedKeys = {};
+let Updater_Digest = (view, digesting) => {
+    let keys = view['@{view#updater.keys}'],
+        changed = view['@{view#updater.data.changed}'],
+        selfId = view.id,
+        vf = Vframe_Vframes[selfId],
+        ref = { d: [], v: [], n: [] },
+        node = G_GetById(selfId),
+        tmpl, vdom, data = view['@{view#updater.data}'],
+        refData = view['@{view#updater.ref.data}'],
+        redigest = trigger => {
+            if (digesting.i < digesting.length) {
+                Updater_Digest(updater, digesting);
+            } else {
+                ref = digesting.slice();
+                digesting.i = digesting.length = 0;
+                /*#if(!modules.mini){#*/
+                if (trigger) {
+                    view.fire('domready');
+                }
+                /*#}#*/
+                G_ToTry(ref);
+            }
+        };
+    digesting.i = digesting.length;
+    view['@{view#updater.data.changed}'] = 0;
+    view['@{view#updater.keys}'] = {};
+    if (changed && view['@{view#sign}'] > 0 && (tmpl = view.tmpl)) {
+        Updater_ChangedKeys[selfId] = keys;
+        view.fire('dompatch');
+        delete Body_RangeEvents[selfId];
+        delete Body_RangeVframes[selfId];
+        /*#if(modules.updaterQuick){#*/
+        vdom = tmpl(data, Q_Create, selfId, refData, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ, G_IsArray, G_Assign);
+        /*#}else{#*/
+        vdom = I_GetNode(tmpl(data, selfId, refData, Updater_Encode, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ), node);
+        /*#}#*/
+        /*#if(modules.updaterQuick){#*/
+        V_SetChildNodes(node, updater['@{view#updater.vdom}'], vdom, ref, vf, keys);
+        updater['@{view#updater.vdom}'] = vdom;
+        /*#}else{#*/
+        I_SetChildNodes(node, vdom, ref, vf, keys);
+        /*#}#*/
+        for (vdom of ref.d) {
+            vdom[0].id = vdom[1];
+        }
+        for (vdom of ref.n) {
+            if (vdom[0] == 1) {
+                vdom[1].appendChild(vdom[2]);
+            } else if (vdom[0] == 2) {
+                vdom[1].removeChild(vdom[2]);
+            } else {
+                vdom[1].replaceChild(vdom[2], vdom[3]);
+            }
+        }
+        /*
+            在dom diff patch时，如果已渲染的vframe有变化，则会在vom tree上先派发created事件，同时传递inner标志，vom tree处理alter事件派发状态，未进入created事件派发状态
+
+            patch完成后，需要设置vframe hold fire created事件，因为带有assign方法的view在调用render后，vom tree处于就绪状态，此时会导致提前派发created事件，应该hold，统一在endUpdate中派发
+
+            有可能不需要endUpdate，所以hold fire要视情况而定
+        */
+        vf['@{vframe#hold.fire}'] = tmpl = ref.c || !view['@{view#rendered}'];
+        for (vdom of ref.v) {
+            vdom['@{view#render.short}']();
+        }
+        if (tmpl) {
+            view.endUpdate(selfId);
+        }
+        delete Updater_ChangedKeys[selfId];
+        /*#if(!modules.mini){#*/
+        if (ref.c) {
+            G_Trigger(G_DOCUMENT, 'htmlchanged', {
+                vId: selfId
+            });
+        }
+        /*#}#*/
+        redigest(1);
+    } else {
+        redigest();
+    }
+};
 /**
  * View类
  * @name View
@@ -320,9 +435,15 @@ function View(id, owner, ops, node, me) {
     me['@{view#resource}'] = {};
     /*#}#*/
     me['@{view#sign}'] = 1; //标识view是否刷新过，对于托管的函数资源，在回调这个函数时，不但要确保view没有销毁，而且要确保view没有刷新过，如果刷新过则不回调
-    /*#if(modules.updater){#*/
-    me.updater = me['@{view#updater}'] = new Updater(me.id);
-    /*#}#*/
+    me['@{view#updater.data.changed}'] = 1;
+    me['@{view#updater.data}'] = {
+        vId: viewId
+    };
+    me['@{view#updater.ref.data}'] = {
+        [G_SPLITER]: 1
+    };
+    me['@{view#updater.digesting.list}'] = [];
+    me['@{view#updater.keys}'] = {};
     /*#if(modules.viewMerge){#*/
     id = View._;
     if (id) G_ToTry(id, [ops, {
@@ -673,53 +794,6 @@ G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
         });
     },
     /*#}#*/
-    /*#if(modules.share){#*/
-    /**
-     * 向子(孙)view公开数据
-     * @param  {String} key key
-     * @param  {Object} data 数据
-     * @beta
-     * @module share
-     */
-    share(key, data) {
-        let me = this;
-        if (!me['@{view#shared.data}']) {
-            me['@{view#shared.data}'] = {};
-        }
-        me['@{view#shared.data}'][key] = data;
-    },
-    /**
-     * 获取祖先view上公开的数据
-     * @param  {String} key key
-     * @return {Object}
-     * @beta
-     * @module share
-     * @example
-     * //父view
-     * render:function(){
-     *     this.share('x',{a:20});
-     * }
-     * //子view
-     * render:function(){
-     *     let d=this.getShared('x');
-     * }
-     */
-    getShared(key) {
-        let me = this;
-        let sd = me['@{view#shared.data}'];
-        let exist;
-        if (sd) {
-            exist = G_Has(sd, key);
-            if (exist) {
-                return sd[key];
-            }
-        }
-        let vf = me.owner.parent();
-        if (vf) {
-            return vf.invoke('getShared', key);
-        }
-    },
-    /*#}#*/
     /**
      * 设置view的html内容
      * @param {String} id 更新节点的id
@@ -751,7 +825,171 @@ G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      * 渲染view，供最终view开发者覆盖
      * @function
      */
-    render: G_NOOP
+    render: G_NOOP,
+    /**
+     * 获取放入的数据
+     * @param  {String} [key] key
+     * @return {Object} 返回对应的数据，当key未传递时，返回整个数据对象
+     * @example
+     * render: function() {
+     *     this.set({
+     *         a: 10,
+     *         b: 20
+     *     });
+     * },
+     * 'read&lt;click&gt;': function() {
+     *     console.log(this.get('a'));
+     * }
+     */
+    get(key, result) {
+        result = this['@{view#updater.data}'];
+        if (key) {
+            result = result[key];
+        }
+        return result;
+    },
+    /**
+     * 通过path获取值
+     * @param  {String} path 点分割的路径
+     * @return {Object}
+     */
+    /*gain: function (path) {
+        let result = this.$d;
+        let ps = path.split('.'),
+            temp;
+        while (result && ps.length) {
+            temp = ps.shift();
+            result = result[temp];
+        }
+        return result;
+    },*/
+    /**
+     * 获取放入的数据
+     * @param  {Object} obj 待放入的数据
+     * @return {Updater} 返回updater
+     * @example
+     * render: function() {
+     *     this.set({
+     *         a: 10,
+     *         b: 20
+     *     });
+     * },
+     * 'read&lt;click&gt;': function() {
+     *     console.log(this.get('a'));
+     * }
+     */
+    set(obj, unchanged) {
+        let me = this;
+        me['@{view#updater.data.changed}'] = G_Set(obj, me['@{view#updater.data}'], me['@{view#updater.keys}'], unchanged) || me['@{view#updater.data.changed}'];
+        return me;
+    },
+    /**
+     * 检测数据变化，更新界面，放入数据后需要显式调用该方法才可以把数据更新到界面
+     * @example
+     * render: function() {
+     *     this.updater.set({
+     *         a: 10,
+     *         b: 20
+     *     }).digest();
+     * }
+     */
+    digest(data, unchanged, resolve) {
+        let me = this.set(data, unchanged)/*#if(!modules.updaterAsync){#*/,
+            digesting = me['@{view#updater.digesting.list}']/*#}#*/;
+        /*
+            view:
+            <div>
+                <mx-dropdown mx-focusout="rerender()"/>
+            <div>
+
+            view.digest=>dropdown.focusout=>view.redigest=>view.redigest.end=>view.digest.end
+
+            view.digest中嵌套了view.redigest，view.redigest可能操作了view.digest中引用的dom,这样会导致view.redigest.end后续的view.digest中出错
+
+            expect
+            view.digest=>dropdown.focusout=>view.digest.end=>view.redigest=>view.redigest.end
+
+            如果在digest的过程中，多次调用自身的digest，则后续的进行排队。前面的执行完成后，排队中的一次执行完毕
+        */
+        if (resolve) {
+            digesting.push(resolve);
+        }
+        if (!digesting.i) {
+            Updater_Digest(me, digesting);
+        } else if (DEBUG) {
+            console.warn('Avoid redigest while updater is digesting');
+        }
+    }/*#if(!modules.mini){#*/,
+    /**
+     * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化
+     * @return {Updater} 返回updater
+     * @example
+     * render: function() {
+     *     this.updater.set({
+     *         a: 20,
+     *         b: 30
+     *     }).digest().snapshot(); //更新完界面后保存快照
+     * },
+     * 'save&lt;click&gt;': function() {
+     *     //save to server
+     *     console.log(this.updater.altered()); //false
+     *     this.updater.set({
+     *         a: 20,
+     *         b: 40
+     *     });
+     *     console.log(this.updater.altered()); //true
+     *     this.updater.snapshot(); //再保存一次快照
+     *     console.log(this.updater.altered()); //false
+     * }
+     */
+    snapshot() {
+        let me = this;
+        me['@{view#updater.data.string}'] = JSONStringify(me['@{view#updater.data}']);
+        return me;
+    },
+    /**
+     * 检测数据是否有变动
+     * @return {Boolean} 是否变动
+     * @example
+     * render: function() {
+     *     this.updater.set({
+     *         a: 20,
+     *         b: 30
+     *     }).digest().snapshot(); //更新完界面后保存快照
+     * },
+     * 'save&lt;click&gt;': function() {
+     *     //save to server
+     *     console.log(this.updater.altered()); //false
+     *     this.updater.set({
+     *         a: 20,
+     *         b: 40
+     *     });
+     *     console.log(this.updater.altered()); //true
+     *     this.updater.snapshot(); //再保存一次快照
+     *     console.log(this.updater.altered()); //false
+     * }
+     */
+    altered() {
+        let me = this;
+        if (me['@{view#updater.data.string}']) {
+            return me['@{view#updater.data.string}'] != JSONStringify(me['@{view#updater.data}']);
+        }
+    },
+    /**
+     * 翻译带@占位符的数据
+     * @param {string} origin 源字符串
+     */
+    translate(data) {
+        return G_TranslateData(this['@{view#updater.data}'], data);
+    },
+    /**
+     * 翻译带@占位符的数据
+     * @param {string} origin 源字符串
+     */
+    parse(origin) {
+        return G_ParseExpr(origin, this['@{view#updater.ref.data}']);
+    }
+    /*#}#*/
     /**
      * 当前view的dom就绪后触发
      * @name View#domready

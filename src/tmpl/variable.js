@@ -17,9 +17,7 @@ let G_VALUE = 'value';
 let G_Tag_Key = 'mxs';
 let G_Tag_Attr_Key = 'mxa';
 let G_Tag_View_Key = 'mxv';
-/*#if(modules.vframeHost){#*/
 let G_Tag_View_Owner = 'mxo';
-/*#}#*/
 let G_HashKey = '#';
 function G_NOOP() { }
 /*#if(modules.service||modules.updater){#*/
@@ -151,7 +149,7 @@ let View_ApplyStyle = (key, css) => {
     }
 };
 /*#}#*/
-let IdIt = n => n.id || (/*#if(!modules.updaterVDOM){#*/n['@{node#auto.id}'] = 1, /*#}#*/n.id = G_Id());
+let IdIt = n => n.id || (/*#if(!modules.updaterQuick){#*/n['@{node#auto.id}'] = 1, /*#}#*/n.id = G_Id());
 let G_ToTry = (fns, args, context, r, e) => {
     args = args || G_EMPTY_ARRAY;
     if (!G_IsArray(fns)) fns = [fns];
