@@ -256,7 +256,11 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
                             '@{view#observe.router}': 1,
                             '@{view#resource}': 1,
                             '@{view#sign}': 1,
-                            '@{view#updater}': 1
+                            '@{view#updater.data.changed}': 1,
+                            '@{view#updater.data}': 1,
+                            '@{view#updater.ref.data}': 1,
+                            '@{view#updater.digesting.list}': 1,
+                            '@{view#updater.keys}': 1
                         };
                         for (let p in view) {
                             if (G_Has(view, p) && viewProto[p]) {
