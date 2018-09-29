@@ -2292,10 +2292,6 @@ define('magix', function () {
         svg: 'http://www.w3.org/2000/svg',
         math: 'http://www.w3.org/1998/Math/MathML'
     };
-    var V_IgnoreKeys = {
-        mxv: 1,
-        mxa: 1
-    };
     var V_SetAttributes = function (oldNode, lastVDOM, newVDOM, ref) {
         var key, value, nMap = newVDOM['g'], oMap = lastVDOM['g'];
         if (lastVDOM) {
@@ -2312,17 +2308,15 @@ define('magix', function () {
             }
         }
         for (key in nMap) {
-            if (!G_Has(V_IgnoreKeys, key)) {
-                value = nMap[key];
-                //旧值与新值不相等
-                if (!lastVDOM || oMap[key] !== value) {
-                    if (key == 'id') {
-                        ref.d.push([oldNode, value]);
-                    }
-                    else {
-                        ref.c = 1;
-                        oldNode.setAttribute(key, value);
-                    }
+            value = nMap[key];
+            //旧值与新值不相等
+            if (!lastVDOM || oMap[key] !== value) {
+                if (key == 'id') {
+                    ref.d.push([oldNode, value]);
+                }
+                else {
+                    ref.c = 1;
+                    oldNode.setAttribute(key, value);
                 }
             }
         }

@@ -2413,10 +2413,6 @@ let V_NSMap = {
     svg: 'http://www.w3.org/2000/svg',
     math: 'http://www.w3.org/1998/Math/MathML'
 };
-let V_IgnoreKeys = {
-    mxv: 1,
-    mxa: 1
-};
 let V_SetAttributes = (oldNode, lastVDOM, newVDOM, ref) => {
     let key, value,
         nMap = newVDOM['g'],
@@ -2434,16 +2430,14 @@ let V_SetAttributes = (oldNode, lastVDOM, newVDOM, ref) => {
         }
     }
     for (key in nMap) {
-        if (!G_Has(V_IgnoreKeys, key)) {
-            value = nMap[key];
-            //旧值与新值不相等
-            if (!lastVDOM || oMap[key] !== value) {
-                if (key == 'id') {
-                    ref.d.push([oldNode, value]);
-                } else {
-                    ref.c = 1;
-                    oldNode.setAttribute(key, value);
-                }
+        value = nMap[key];
+        //旧值与新值不相等
+        if (!lastVDOM || oMap[key] !== value) {
+            if (key == 'id') {
+                ref.d.push([oldNode, value]);
+            } else {
+                ref.c = 1;
+                oldNode.setAttribute(key, value);
             }
         }
     }
