@@ -263,7 +263,7 @@ let I_SetChildNodes = (oldParent, newParent, ref, vframe, keys) => {
     }
 };
 
-let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
+let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys) => {
     //优先使用浏览器内置的方法进行判断
     /*
         特殊属性优先判断，先识别特殊属性是否发生了改变
@@ -278,7 +278,7 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
         目前是显示abc
     */
     if (I_SpecialDiff(oldNode, newNode) ||
-        (oldNode.nodeType == 1 && (hasMXV = oldNode.hasAttribute(G_Tag_View_Key))) ||
+        (oldNode.nodeType == 1 && oldNode.hasAttribute(G_Tag_View_Key)) ||
         !(oldNode.isEqualNode && oldNode.isEqualNode(newNode))) {
         if (oldNode.nodeName === newNode.nodeName) {
             // Handle regular element node updates.
@@ -312,7 +312,6 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
                     if (!htmlChanged && !paramsChanged && assign) {
                         //对于mxv属性，带value的必定是组件
                         //所以对组件，我们只检测参数与html，所以组件的hasMXV=0
-                        hasMXV = 0;
                         params = assign.split(G_COMMA);
                         for (assign of params) {
                             //支持模板内使用this获取整个数据对象
@@ -330,14 +329,12 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
                         if (assign) {
                             params = uri[G_PARAMS];
                             //处理引用赋值
-                            /*#if(modules.viewChildren){#*/newStaticAttrKey = /*#}#*/Vframe_TranslateQuery(oldVf.hId || oldVf.pId, newMxView, params);
+                            Vframe_TranslateQuery(oldVf.pId, newMxView, params);
                             oldVf['@{vframe#template}'] = newHTML;
                             //oldVf['@{vframe#data.stringify}'] = newDataStringify;
                             oldVf[G_PATH] = newMxView;//update ref
                             uri = {
-                                node: newNode,/*#if(modules.viewChildren){#*/
-                                map: Children_Wrap(newNode, newStaticAttrKey),
-                                /*#}#*/
+                                node: newNode,
                                 //html: newHTML,
                                 deep: !view.tmpl,
                                 attr: updateAttribute,

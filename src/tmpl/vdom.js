@@ -78,12 +78,6 @@ let V_CreateNode = (vnode, owner, ref) => {
         c = G_DOCUMENT.createTextNode(vnode['@{~v#node.outer.html}']);
     } else {
         c = G_DOCUMENT.createElementNS(V_NSMap[tag] || owner.namespaceURI, tag);
-
-        /*#if(modules.viewChildren){#*/
-        if (vnode['@{~v#node.attrs.map}'][G_MX_VIEW]) {
-            c['@{node#vnode}'] = vnode;
-        }
-        /*#}#*/
         V_SetAttributes(c, 0, vnode, ref);
         for (tag of vnode['@{~v#node.children}']) {
             c.appendChild(V_CreateNode(tag, owner, ref));
@@ -165,7 +159,7 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
         }
     }
 };
-let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys, hasMXV) => {
+let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
     if (DEBUG) {
         if (oldParent.nodeName == 'TEMPLATE') {
             console.error('unsupport template tag');
@@ -178,7 +172,7 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys, hasM
     let lastAMap = lastVDOM['@{~v#node.attrs.map}'],
         newAMap = newVDOM['@{~v#node.attrs.map}'];
     if (V_SpecialDiff(realNode, lastVDOM, newVDOM) ||
-        (hasMXV = lastVDOM['@{~v#node.has.mxv}']) ||
+        lastVDOM['@{~v#node.has.mxv}'] ||
         lastVDOM['@{~v#node.outer.html}'] != newVDOM['@{~v#node.outer.html}']) {
         if (lastVDOM['@{~v#node.tag}'] == newVDOM['@{~v#node.tag}']) {
             if (lastVDOM['@{~v#node.tag}'] == V_TEXT_NODE) {
@@ -215,13 +209,23 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys, hasM
                     (view = oldVf['@{vframe#view.entity}'])) {
                     htmlChanged = newHTML != lastVDOM['@{~v#node.html}'];
                     paramsChanged = newMxView != oldVf[G_PATH];
-                    if (paramsChanged || htmlChanged || hasMXV || updateAttribute) {
+                    assign = lastAMap[G_Tag_View_Key];
+                    if (!htmlChanged && !paramsChanged && assign) {
+                        params = assign.split(G_COMMA);
+                        for (assign of params) {
+                            if (assign == G_HashKey || G_Has(keys, assign)) {
+                                paramsChanged = 1;
+                                break;
+                            }
+                        }
+                    }
+                    if (paramsChanged || htmlChanged || updateAttribute) {
                         assign = view['@{view#rendered}'] && view['@{view#assign.fn}'];
                         //如果有assign方法,且有参数或html变化
                         if (assign) {
                             params = uri[G_PARAMS];
                             //处理引用赋值
-                            /*#if(modules.viewChildren){#*/lastAMap = /*#}#*/Vframe_TranslateQuery(oldVf.hId || oldVf.pId, newMxView, params);
+                            Vframe_TranslateQuery(oldVf.pId, newMxView, params);
                             oldVf[G_PATH] = newMxView;//update ref
                             //如果需要更新，则进行更新的操作
                             uri = {
@@ -230,15 +234,9 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys, hasM
                                 //mxv: hasMXV,
                                 node: realNode,
                                 attr: updateAttribute,
-                                /*#if(modules.viewChildren){#*/
-                                vnode: newVDOM,
-                                map: Children_Wrap(newVDOM, lastAMap),
-                                /*#}#*/
-                                //html: newHTML,
                                 deep: !view.tmpl,
                                 inner: htmlChanged,
-                                query: paramsChanged,
-                                keys
+                                query: paramsChanged
                             };
                             //updateAttribute = 1;
                             if (G_ToTry(assign, [params, uri], view)) {

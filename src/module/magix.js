@@ -61,9 +61,6 @@ Inc('../tmpl/dispatcher');
 /*#}#*/
 Inc('../tmpl/vframe');
 Inc('../tmpl/body');
-/*#if(modules.viewChildren){#*/
-Inc('../tmpl/children');
-/*#}#*/
 /*#if(modules.updaterQuick){#*/
 Inc('../tmpl/quick');
 Inc('../tmpl/vdom');

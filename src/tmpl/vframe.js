@@ -41,7 +41,6 @@ let Vframe_TranslateQuery = (pId, src, params, pVf) => {
     if (src.indexOf(G_SPLITER) > 0) {
         G_TranslateData(pVf, params);
     }
-    return pVf;
 };
 /**
  * 获取根vframe;
@@ -73,6 +72,10 @@ let Vframe_AddVframe = (id, vframe) => {
         Vframe.fire('add', {
             vframe
         });
+        /*#}#*/
+        /*#if(modules.nodeAttachVframe){#*/
+        id = G_GetById(id);
+        if (id) id.vframe = vframe;
         /*#}#*/
     }
 };
@@ -108,7 +111,10 @@ let Vframe_RemoveVframe = (id, fcc, vframe) => {
         id = G_GetById(id);
         if (id) {
             id['@{node#mounted.vframe}'] = 0;
-            /*#if(!modules.updaterQuick){#*/
+            /*#if(modules.nodeAttachVframe){#*/
+            id.vframe = 0;
+            /*#}#*/
+            /*#if(modules.updaterDOM){#*/
             id['@{node#auto.id}'] = 0;
             /*#}#*/
         }
@@ -130,7 +136,7 @@ let Vframe_RemoveVframe = (id, fcc, vframe) => {
  * @property {String} path 当前view的路径名，包括参数
  * @property {String} pId 父vframe的id，如果是根节点则为undefined
  */
-function Vframe(id, pId, hId, me) {
+function Vframe(id, pId, me) {
     me = this;
     me.id = id;
     if (DEBUG) {
@@ -157,8 +163,10 @@ function Vframe(id, pId, hId, me) {
     /*#if(modules.linkage){#*/
     me['@{vframe#invoke.list}'] = []; //invokeList
     /*#}#*/
+    /*#if(modules.updaterAsync){#*/
+    me['@{vframe#async.priority}'] = G_COUNTER++;
+    /*#}#*/
     me.pId = pId;
-    me.hId = hId;
     Vframe_AddVframe(id, me);
 }
 /*#if(!modules.mini){#*/
@@ -207,23 +215,23 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      * @param {String} viewPath 形如:app/views/home?type=1&page=2 这样的view路径
      * @param {Object|Null} [viewInitParams] 调用view的init方法时传递的参数
      */
-    mountView(viewPath, viewInitParams) {
+    mountView(viewPath, viewInitParams /*,keepPreHTML*/) {
         let me = this;
         let id = me.id;
         let node = G_GetById(id),
-            pId = me.hId || me.pId, po, sign, view, params /*#if(modules.viewProtoMixins){#*/, ctors /*#}#*/, parentVf/*#if(modules.viewChildren&&modules.updaterQuick){#*/, vnode/*#}#*/;
+            pId = me.pId, po, sign, view, params /*#if(modules.viewProtoMixins){#*/, ctors /*#}#*/;
         if (!me['@{vframe#alter.node}'] && node) { //alter
             me['@{vframe#alter.node}'] = 1;
             me['@{vframe#template}'] = node.innerHTML; //.replace(ScriptsReg, ''); template
         }
-        me.unmountView();
+        me.unmountView(/*keepPreHTML*/);
         me['@{vframe#destroyed}'] = 0; //destroyed 详见unmountView
         po = G_ParseUri(viewPath || G_EMPTY);
         view = po[G_PATH];
         if (node && view) {
             me[G_PATH] = viewPath;
             params = po[G_PARAMS];
-            /*#if(modules.viewChildren){#*/parentVf = /*#}#*/Vframe_TranslateQuery(pId, viewPath, params);
+            Vframe_TranslateQuery(pId, viewPath, params);
             me['@{vframe#view.path}'] = po[G_PATH];
             G_Assign(params, viewInitParams);
             sign = me['@{vframe#sign}'];
@@ -237,10 +245,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
                     /*#}else{#*/
                     View_Prepare(TView);
                     /*#}#*/
-                    /*#if(modules.viewChildren&&modules.updaterQuick){#*/
-                    vnode = node['@{node#vnode}'];
-                    /*#}#*/
-                    view = new TView(id, me, params, node/*#if(modules.viewChildren&&modules.updaterQuick){#*/, vnode/*#}#*//*#if(modules.viewChildren){#*/, parentVf/*#}#*//*#if(modules.viewProtoMixins){#*/, ctors /*#}#*/);
+                    view = new TView(id, me, params/*#if(modules.viewProtoMixins){#*/, ctors /*#}#*/);
 
                     if (DEBUG) {
                         let viewProto = TView.prototype;
@@ -274,14 +279,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
                     View_DelegateEvents(view);
                     /*#if(modules.viewInit){#*/
                     /*#if(modules.viewInitAsync){#*/
-                    params =/*#}#*/ G_ToTry(view.init, [params, {
-                        node,
-                        /*#if(modules.updaterQuick&&modules.viewChildren){#*/
-                        vnode,
-                        /*#}#*/
-                        deep: !view.tmpl/*#if(modules.viewChildren){#*/,
-                        map: Children_Wrap(/*#if(modules.updaterQuick){#*/vnode/*#}else{#*/node/*#}#*/, parentVf)/*#}#*/
-                    }], view);
+                    params =/*#}#*/ G_ToTry(view.init, params, view);
                     /*#}#*/
                     /*#if(modules.viewInitAsync){#*/
                     if (!params) params = { then: f => f() };
@@ -330,6 +328,9 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
                 v['@{view#sign}'] = 0;
                 delete Body_RangeEvents[id];
                 delete Body_RangeVframes[id];
+                /*#if(modules.updaterAsync){#*/
+                Async_DeleteTask(id);
+                /*#}#*/
                 /*#if(!modules.mini){#*/
                 v.fire('destroy', 0, 1, 1);
                 /*#}#*/
@@ -342,7 +343,13 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
             v['@{view#sign}']--;
             node = G_GetById(id);
             if (node && me['@{vframe#alter.node}'] /*&&!keepPreHTML*/) { //如果$v本身是没有模板的，也需要把节点恢复到之前的状态上：只有保留模板且$v有模板的情况下，这条if才不执行，否则均需要恢复节点的html，即$v安装前什么样，销毁后把节点恢复到安装前的情况
+                /*#if(!modules.keepHTML){#*/
+                /*#if(modules.naked){#*/
                 node.innerHTML = me['@{vframe#template}'];
+                /*#}else{#*/
+                $(node).html(me['@{vframe#template}']);
+                /*#}#*/
+                /*#}#*/
             }
             if (reset)
                 Vframe_GlobalAlter = 0;
@@ -364,12 +371,13 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      * view.owner.mountVframe('magix_vf_defer','app/views/list',{page:2})
      * //注意：动态向某个节点渲染view时，该节点无须是vframe标签
      */
-    mountVframe(vfId, hostId, viewPath, viewInitParams) {
+    mountVframe(vfId, viewPath, viewInitParams /*, keepPreHTML*/) {
         let me = this,
             vf, id = me.id, c = me['@{vframe#children}'];
         Vframe_NotifyAlter(me, {
             id: vfId
         }); //如果在就绪的vframe上渲染新的vframe，则通知有变化
+        //let vom = me.owner;
         vf = Vframe_Vframes[vfId];
         if (!vf) {
             if (!G_Has(c, vfId)) { //childrenMap,当前子vframe不包含这个id
@@ -378,15 +386,17 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
                 /*#}#*/
                 me['@{vframe#children.count}']++; //childrenCount ，增加子节点
             }
-            c[vfId] = vfId;
+            c[vfId] = vfId; //map
+            //
             vf = Vframe_Cache.pop();
             if (vf) {
-                Vframe.call(vf, vfId, id, hostId);
+                Vframe.call(vf, vfId, id);
             } else {
-                vf = new Vframe(vfId, id, hostId);
+                vf = new Vframe(vfId, id);
             }
+            //vf = Vframe_GetVf(id, me.id);// new Vframe(id, me.id);
         }
-        vf.mountView(viewPath, viewInitParams);
+        vf.mountView(viewPath, viewInitParams /*,keepPreHTML*/);
         return vf;
     },
     /**
@@ -400,7 +410,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      *
      * view.onwer.mountZone('zone');//即可完成zone节点下的view渲染
      */
-    mountZone(zoneId, inner) {
+    mountZone(zoneId, inner /*,keepPreHTML*/) {
         let me = this;
         let vf, id, vfs = [];
         zoneId = zoneId || me.id;
@@ -423,23 +433,21 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
 
         me['@{vframe#hold.fire}'] = 1; //hold fire creted
         //me.unmountZone(zoneId, 1); 不去清理，详情见：https://github.com/thx/magix/issues/27
-        let subs = {},
-            svfs, subVf;
+        /*#if(modules.collectView){#*/
+        let temp = [];
+        for (vf of vframes) {
+            temp.push(vf.getAttribute(G_MX_VIEW));
+        }
+        G_Require(temp);
+        /*#}#*/
         for (vf of vframes) {
             if (!vf['@{node#mounted.vframe}']) { //防止嵌套的情况下深层的view被反复实例化
                 id = IdIt(vf);
-                if (!G_Has(subs, id)) {
-                    vf['@{node#mounted.vframe}'] = 1;
-                    vfs.push([id, vf.getAttribute(G_MX_VIEW), vf.getAttribute(G_Tag_View_Owner)]);
-                }
-                svfs = $(`${G_HashKey}${id} [${G_MX_VIEW}]`);
-                for (subVf of svfs) {
-                    id = IdIt(subVf);
-                    subs[id] = 1;
-                }
+                vf['@{node#mounted.vframe}'] = 1;
+                vfs.push([id, vf.getAttribute(G_MX_VIEW)]);
             }
         }
-        for ([id, vf, subVf] of vfs) {
+        for ([id, vf] of vfs) {
             if (DEBUG && document.querySelectorAll(`#${id}`).length > 1) {
                 Magix_Cfg.error(Error(`mount vframe error. dom id:"${id}" duplicate`));
             }
@@ -447,10 +455,10 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
                 if (vfs[id]) {
                     Magix_Cfg.error(Error(`vf.id duplicate:${id} at ${me[G_PATH]}`));
                 } else {
-                    me.mountVframe(vfs[id] = id, subVf, vf);
+                    me.mountVframe(vfs[id] = id, vf);
                 }
             } else {
-                me.mountVframe(id, subVf, vf);
+                me.mountVframe(id, vf);
             }
         }
         me['@{vframe#hold.fire}'] = 0;
@@ -462,22 +470,25 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      * 销毁vframe
      * @param  {String} [id]      节点id
      */
-    unmountVframe(id, inner) { //inner 标识是否是由内部调用，外部不应该传递该参数
+    unmountVframe(id /*,keepPreHTML*/, inner) { //inner 标识是否是由内部调用，外部不应该传递该参数
         let me = this,
             vf;
         id = id ? me['@{vframe#children}'][id] : me.id;
+        //let vom = me.owner;
         vf = Vframe_Vframes[id];
         if (vf) {
             let { '@{vframe#children.created}': cr, pId } = vf;
-            vf.unmountView();
+            vf.unmountView(/*keepPreHTML*/);
             Vframe_RemoveVframe(id, cr);
-            vf.id = vf.pId = vf.hId = vf['@{vframe#children}'] = vf['@{vframe#children.ready}'] = 0; //清除引用,防止被移除的view内部通过setTimeout之类的异步操作有关的界面，影响真正渲染的view
-            /*#if(!modules.updaterQuick){#*/
+            vf.id = vf.pId = vf['@{vframe#children}'] = vf['@{vframe#children.ready}'] = 0; //清除引用,防止被移除的view内部通过setTimeout之类的异步操作有关的界面，影响真正渲染的view
+            /*#if(!modules.updaterVDOM){#*/
             vf['@{vframe#alter.node}'] = 0;
             /*#}#*/
             vf.off('alter');
             vf.off('created');
+            //if (Vframe_Cache.length < 10) {
             Vframe_Cache.push(vf);
+            //}
             vf = Vframe_Vframes[pId];
             if (vf && G_Has(vf['@{vframe#children}'], id)) { //childrenMap
                 delete vf['@{vframe#children}'][id]; //childrenMap
@@ -498,7 +509,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
         let p;
         for (p in me['@{vframe#children}']) {
             if (!zoneId || (p != zoneId && G_NodeIn(p, zoneId))) {
-                me.unmountVframe(p, 1);
+                me.unmountVframe(p /*,keepPreHTML,*/, 1);
             }
         }
         if (!inner) Vframe_NotifyCreated(me);
@@ -516,14 +527,6 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
         while (vf && level--) {
             vf = Vframe_Vframes[vf.pId];
         }
-        return vf;
-    },
-    /**
-     * 获取当前组件所在的view
-     */
-    host(vf) {
-        vf = this;
-        vf = Vframe_Vframes[vf.hId || vf.pId];
         return vf;
     },
     /**

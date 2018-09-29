@@ -1687,7 +1687,6 @@ define('magix', function () {
         if (src.indexOf(G_SPLITER) > 0) {
             G_TranslateData(pVf, params);
         }
-        return pVf;
     };
     /**
      * 获取根vframe;
@@ -1765,7 +1764,7 @@ define('magix', function () {
      * @property {String} path 当前view的路径名，包括参数
      * @property {String} pId 父vframe的id，如果是根节点则为undefined
      */
-    function Vframe(id, pId, hId, me) {
+    function Vframe(id, pId, me) {
         me = this;
         me.id = id;
         if (DEBUG) {
@@ -1791,7 +1790,6 @@ define('magix', function () {
         me['$e'] = {}; //readyMap
         me['$f'] = []; //invokeList
         me.pId = pId;
-        me.hId = hId;
         Vframe_AddVframe(id, me);
     }
     G_Assign(Vframe, {
@@ -1838,15 +1836,15 @@ define('magix', function () {
          * @param {String} viewPath 形如:app/views/home?type=1&page=2 这样的view路径
          * @param {Object|Null} [viewInitParams] 调用view的init方法时传递的参数
          */
-        mountView: function (viewPath, viewInitParams) {
+        mountView: function (viewPath, viewInitParams /*,keepPreHTML*/) {
             var me = this;
             var id = me.id;
-            var node = G_GetById(id), pId = me.hId || me.pId, po, sign, view, params, ctors, parentVf;
+            var node = G_GetById(id), pId = me.pId, po, sign, view, params, ctors;
             if (!me['$h'] && node) { //alter
                 me['$h'] = 1;
                 me['$i'] = node.innerHTML; //.replace(ScriptsReg, ''); template
             }
-            me.unmountView();
+            me.unmountView( /*keepPreHTML*/);
             me['$b'] = 0; //destroyed 详见unmountView
             po = G_ParseUri(viewPath || G_EMPTY);
             view = po[G_PATH];
@@ -1863,7 +1861,7 @@ define('magix', function () {
                             return Magix_Cfg.error(Error("id:" + id + " cannot load:" + view));
                         }
                         ctors = View_Prepare(TView);
-                        view = new TView(id, me, params, node, ctors);
+                        view = new TView(id, me, params, ctors);
                         if (DEBUG) {
                             var viewProto_1 = TView.prototype;
                             var importantProps_1 = {
@@ -1892,10 +1890,7 @@ define('magix', function () {
                         me['$v'] = view;
                         me['$a'] = Dispatcher_UpdateTag;
                         View_DelegateEvents(view);
-                        params = G_ToTry(view.init, [params, {
-                                node: node,
-                                deep: !view.tmpl
-                            }], view);
+                        params = G_ToTry(view.init, params, view);
                         if (!params)
                             params = { then: function (f) { return f(); } };
                         sign = ++me['$g'];
@@ -1944,7 +1939,7 @@ define('magix', function () {
                 v['$a']--;
                 node = G_GetById(id);
                 if (node && me['$h'] /*&&!keepPreHTML*/) { //如果$v本身是没有模板的，也需要把节点恢复到之前的状态上：只有保留模板且$v有模板的情况下，这条if才不执行，否则均需要恢复节点的html，即$v安装前什么样，销毁后把节点恢复到安装前的情况
-                    node.innerHTML = me['$i'];
+                    $(node).html(me['$i']);
                 }
                 if (reset)
                     Vframe_GlobalAlter = 0;
@@ -1966,27 +1961,30 @@ define('magix', function () {
          * view.owner.mountVframe('magix_vf_defer','app/views/list',{page:2})
          * //注意：动态向某个节点渲染view时，该节点无须是vframe标签
          */
-        mountVframe: function (vfId, hostId, viewPath, viewInitParams) {
+        mountVframe: function (vfId, viewPath, viewInitParams /*, keepPreHTML*/) {
             var me = this, vf, id = me.id, c = me['$c'];
             Vframe_NotifyAlter(me, {
                 id: vfId
             }); //如果在就绪的vframe上渲染新的vframe，则通知有变化
+            //let vom = me.owner;
             vf = Vframe_Vframes[vfId];
             if (!vf) {
                 if (!G_Has(c, vfId)) { //childrenMap,当前子vframe不包含这个id
                     me['$n'] = 0; //childrenList 清空缓存的子列表
                     me['$cc']++; //childrenCount ，增加子节点
                 }
-                c[vfId] = vfId;
+                c[vfId] = vfId; //map
+                //
                 vf = Vframe_Cache.pop();
                 if (vf) {
-                    Vframe.call(vf, vfId, id, hostId);
+                    Vframe.call(vf, vfId, id);
                 }
                 else {
-                    vf = new Vframe(vfId, id, hostId);
+                    vf = new Vframe(vfId, id);
                 }
+                //vf = Vframe_GetVf(id, me.id);// new Vframe(id, me.id);
             }
-            vf.mountView(viewPath, viewInitParams);
+            vf.mountView(viewPath, viewInitParams /*,keepPreHTML*/);
             return vf;
         },
         /**
@@ -2000,7 +1998,7 @@ define('magix', function () {
          *
          * view.onwer.mountZone('zone');//即可完成zone节点下的view渲染
          */
-        mountZone: function (zoneId, inner) {
+        mountZone: function (zoneId, inner /*,keepPreHTML*/) {
             var me = this;
             var vf, id, vfs = [];
             zoneId = zoneId || me.id;
@@ -2021,25 +2019,16 @@ define('magix', function () {
              */
             me['$d'] = 1; //hold fire creted
             //me.unmountZone(zoneId, 1); 不去清理，详情见：https://github.com/thx/magix/issues/27
-            var subs = {}, svfs, subVf;
             for (var _i = 0, vframes_1 = vframes; _i < vframes_1.length; _i++) {
                 vf = vframes_1[_i];
                 if (!vf['$b']) { //防止嵌套的情况下深层的view被反复实例化
                     id = IdIt(vf);
-                    if (!G_Has(subs, id)) {
-                        vf['$b'] = 1;
-                        vfs.push([id, vf.getAttribute(G_MX_VIEW), vf.getAttribute(G_Tag_View_Owner)]);
-                    }
-                    svfs = $("" + G_HashKey + id + " [" + G_MX_VIEW + "]");
-                    for (var _a = 0, svfs_1 = svfs; _a < svfs_1.length; _a++) {
-                        subVf = svfs_1[_a];
-                        id = IdIt(subVf);
-                        subs[id] = 1;
-                    }
+                    vf['$b'] = 1;
+                    vfs.push([id, vf.getAttribute(G_MX_VIEW)]);
                 }
             }
-            for (var _b = 0, vfs_1 = vfs; _b < vfs_1.length; _b++) {
-                _c = vfs_1[_b], id = _c[0], vf = _c[1], subVf = _c[2];
+            for (var _a = 0, vfs_1 = vfs; _a < vfs_1.length; _a++) {
+                _b = vfs_1[_a], id = _b[0], vf = _b[1];
                 if (DEBUG && document.querySelectorAll("#" + id).length > 1) {
                     Magix_Cfg.error(Error("mount vframe error. dom id:\"" + id + "\" duplicate"));
                 }
@@ -2048,36 +2037,39 @@ define('magix', function () {
                         Magix_Cfg.error(Error("vf.id duplicate:" + id + " at " + me[G_PATH]));
                     }
                     else {
-                        me.mountVframe(vfs[id] = id, subVf, vf);
+                        me.mountVframe(vfs[id] = id, vf);
                     }
                 }
                 else {
-                    me.mountVframe(id, subVf, vf);
+                    me.mountVframe(id, vf);
                 }
             }
             me['$d'] = 0;
             if (!inner) {
                 Vframe_NotifyCreated(me);
             }
-            var _c;
+            var _b;
         },
         /**
          * 销毁vframe
          * @param  {String} [id]      节点id
          */
-        unmountVframe: function (id, inner) {
+        unmountVframe: function (id /*,keepPreHTML*/, inner) {
             var me = this, vf;
             id = id ? me['$c'][id] : me.id;
+            //let vom = me.owner;
             vf = Vframe_Vframes[id];
             if (vf) {
                 var cr = vf["$cr"], pId = vf.pId;
-                vf.unmountView();
+                vf.unmountView( /*keepPreHTML*/);
                 Vframe_RemoveVframe(id, cr);
-                vf.id = vf.pId = vf.hId = vf['$c'] = vf['$e'] = 0; //清除引用,防止被移除的view内部通过setTimeout之类的异步操作有关的界面，影响真正渲染的view
+                vf.id = vf.pId = vf['$c'] = vf['$e'] = 0; //清除引用,防止被移除的view内部通过setTimeout之类的异步操作有关的界面，影响真正渲染的view
                 vf['$h'] = 0;
                 vf.off('alter');
                 vf.off('created');
+                //if (Vframe_Cache.length < 10) {
                 Vframe_Cache.push(vf);
+                //}
                 vf = Vframe_Vframes[pId];
                 if (vf && G_Has(vf['$c'], id)) { //childrenMap
                     delete vf['$c'][id]; //childrenMap
@@ -2097,7 +2089,7 @@ define('magix', function () {
             var p;
             for (p in me['$c']) {
                 if (!zoneId || (p != zoneId && G_NodeIn(p, zoneId))) {
-                    me.unmountVframe(p, 1);
+                    me.unmountVframe(p /*,keepPreHTML,*/, 1);
                 }
             }
             if (!inner)
@@ -2116,14 +2108,6 @@ define('magix', function () {
             while (vf && level--) {
                 vf = Vframe_Vframes[vf.pId];
             }
-            return vf;
-        },
-        /**
-         * 获取当前组件所在的view
-         */
-        host: function (vf) {
-            vf = this;
-            vf = Vframe_Vframes[vf.hId || vf.pId];
             return vf;
         },
         /**
@@ -2738,7 +2722,7 @@ define('magix', function () {
             ref.c = 1;
         }
     };
-    var I_SetNode = function (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) {
+    var I_SetNode = function (oldNode, newNode, oldParent, ref, vf, keys) {
         //优先使用浏览器内置的方法进行判断
         /*
             特殊属性优先判断，先识别特殊属性是否发生了改变
@@ -2753,7 +2737,7 @@ define('magix', function () {
             目前是显示abc
         */
         if (I_SpecialDiff(oldNode, newNode) ||
-            (oldNode.nodeType == 1 && (hasMXV = oldNode.hasAttribute(G_Tag_View_Key))) ||
+            (oldNode.nodeType == 1 && oldNode.hasAttribute(G_Tag_View_Key)) ||
             !(oldNode.isEqualNode && oldNode.isEqualNode(newNode))) {
             if (oldNode.nodeName === newNode.nodeName) {
                 // Handle regular element node updates.
@@ -2766,20 +2750,38 @@ define('magix', function () {
                     // If we have the same nodename then we can directly update the attributes.
                     var newMxView = newNode.getAttribute(G_MX_VIEW), newHTML = newNode.innerHTML;
                     var newStaticAttrKey = newNode.getAttribute(G_Tag_Attr_Key);
-                    var updateAttribute = newStaticAttrKey ? newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key) : I_AttrDiff(oldNode, newNode), updateChildren = void 0, unmountOld = void 0, oldVf = Vframe_Vframes[oldNode.id], assign = void 0, view = void 0, uri = newMxView && G_ParseUri(newMxView), params = void 0, htmlChanged = void 0, paramsChanged = void 0;
+                    var updateAttribute = newStaticAttrKey ? newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key) : I_AttrDiff(oldNode, newNode), updateChildren = void 0, unmountOld = void 0, oldVf = Vframe_Vframes[oldNode.id], view = void 0, uri = newMxView && G_ParseUri(newMxView), params = void 0, htmlChanged = void 0, paramsChanged = void 0, assign = void 0;
                     if (newMxView && oldVf &&
                         (!newNode.id || newNode.id == oldNode.id) &&
                         oldVf['$j'] == uri[G_PATH] &&
                         (view = oldVf['$v'])) {
                         htmlChanged = newHTML != oldVf['$i'];
                         paramsChanged = newMxView != oldVf[G_PATH];
+                        assign = oldNode.getAttribute(G_Tag_View_Key);
+                        //如果组件内html没改变，参数也没改变
+                        //我们要检测引用参数是否发生了改变
+                        if (!htmlChanged && !paramsChanged && assign) {
+                            //对于mxv属性，带value的必定是组件
+                            //所以对组件，我们只检测参数与html，所以组件的hasMXV=0
+                            params = assign.split(G_COMMA);
+                            for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
+                                assign = params_1[_i];
+                                //支持模板内使用this获取整个数据对象
+                                //如果使用this来传递数据，我们把this的key处理成#号
+                                //遇到#号则任意的数据改变都需要更新当前这个组件
+                                if (assign == G_HashKey || G_Has(keys, assign)) {
+                                    paramsChanged = 1;
+                                    break;
+                                }
+                            }
+                        }
                         //目前属性变化并不更新view,如果要更新，只需要再判断下updateAttribute即可
-                        if (paramsChanged || htmlChanged || hasMXV || updateAttribute) {
+                        if (paramsChanged || htmlChanged || updateAttribute) {
                             assign = view['$f'] && view['$g'];
                             if (assign) {
                                 params = uri[G_PARAMS];
                                 //处理引用赋值
-                                Vframe_TranslateQuery(oldVf.hId || oldVf.pId, newMxView, params);
+                                Vframe_TranslateQuery(oldVf.pId, newMxView, params);
                                 oldVf['$i'] = newHTML;
                                 //oldVf['$o'] = newDataStringify;
                                 oldVf[G_PATH] = newMxView; //update ref
@@ -2790,8 +2792,8 @@ define('magix', function () {
                                     attr: updateAttribute,
                                     //mxv: hasMXV,
                                     inner: htmlChanged,
-                                    query: paramsChanged,
-                                    keys: keys
+                                    query: paramsChanged /*,
+                                    keys*/
                                 };
                                 //updateAttribute = 1;
                                 /*if (updateAttribute) {
@@ -2968,18 +2970,14 @@ define('magix', function () {
         var ctors = [];
         if (ctor)
             ctors.push(ctor);
-        function NView(nodeId, ownerVf, initParams, node, mixinCtors, cs, z, params, concatCtors) {
-            me.call(z = this, nodeId, ownerVf, initParams, node, mixinCtors);
+        function NView(nodeId, ownerVf, initParams, mixinCtors, cs, z, concatCtors) {
+            me.call(z = this, nodeId, ownerVf, initParams, mixinCtors);
             cs = NView._;
-            params = [initParams, {
-                    node: node,
-                    deep: !z.tmpl
-                }];
             if (cs)
-                G_ToTry(cs, params, z);
+                G_ToTry(cs, initParams, z);
             concatCtors = ctors.concat(mixinCtors);
             if (concatCtors.length) {
-                G_ToTry(concatCtors, params, z);
+                G_ToTry(concatCtors, initParams, z);
             }
         }
         NView.merge = merge;
@@ -3218,7 +3216,7 @@ define('magix', function () {
      *      alert(e.type);//可通过type识别是哪种事件类型
      *  }
      */
-    function View(id, owner, ops, node, me) {
+    function View(id, owner, ops, me) {
         me = this;
         me.owner = owner;
         me.id = id;
@@ -3238,10 +3236,7 @@ define('magix', function () {
         me['$h'] = {};
         id = View._;
         if (id)
-            G_ToTry(id, [ops, {
-                    node: node,
-                    deep: !me.tmpl
-                }], me);
+            G_ToTry(id, ops, me);
         var _a;
     }
     G_Assign(View, {
@@ -3762,6 +3757,9 @@ define('magix', function () {
          */
         parse: function (origin) {
             return G_ParseExpr(origin, this['$d']);
+        },
+        changed: function () {
+            return this['$i'];
         }
         /**
          * 当前view的dom就绪后触发

@@ -126,32 +126,18 @@ function extend(props, statics) {
     let ctors = [];
     if (ctor) ctors.push(ctor);
     /*#}#*/
-    function NView(nodeId, ownerVf, initParams, node/*#if(modules.viewChildren&&modules.updaterQuick){#*/, vnode/*#}#*//*#if(modules.viewChildren){#*/, parentVf /*#}#*//*#if(modules.viewProtoMixins){#*/, mixinCtors /*#}#*/, cs, z, params/*#if(modules.viewProtoMixins){#*/, concatCtors/*#}#*/) {
-        me.call(z = this, nodeId, ownerVf, initParams, node/*#if(modules.viewChildren&&modules.updaterQuick){#*/, vnode/*#}#*//*#if(modules.viewChildren){#*/, parentVf/*#}#*//*#if(modules.viewProtoMixins){#*/, mixinCtors/*#}#*/);
+    function NView(nodeId, ownerVf, initParams/*#if(modules.viewProtoMixins){#*/, mixinCtors /*#}#*/, cs, z/*#if(modules.viewProtoMixins){#*/, concatCtors/*#}#*/) {
+        me.call(z = this, nodeId, ownerVf, initParams/*#if(modules.viewProtoMixins){#*/, mixinCtors/*#}#*/);
         cs = NView._;
         /*#if(modules.viewProtoMixins){#*/
-        params = [initParams, {
-            node,/*#if(modules.viewChildren&&modules.updaterQuick){#*/
-            vnode,
-            /*#}#*/
-            deep: !z.tmpl/*#if(modules.viewChildren){#*/,
-            map: Children_Wrap(/*#if(modules.updaterQuick){#*/vnode/*#}else{#*/node/*#}#*/, parentVf)/*#}#*/
-        }];
-        if (cs) G_ToTry(cs, params, z);
+        if (cs) G_ToTry(cs, initParams, z);
         concatCtors = ctors.concat(mixinCtors);
         if (concatCtors.length) {
-            G_ToTry(concatCtors, params, z);
+            G_ToTry(concatCtors, initParams, z);
         }
         /*#}else{#*/
-        params = {
-            node,/*#if(modules.viewChildren&&modules.updaterQuick){#*/
-            vnode,
-            /*#}#*/
-            deep: !z.tmpl/*#if(modules.viewChildren){#*/,
-            map: Children_Wrap(/*#if(modules.updaterQuick){#*/vnode/*#}else{#*/node/*#}#*/, parentVf)/*#}#*/
-        };
-        if (cs) G_ToTry(cs, [initParams, params], z);
-        if (ctor) ctor.call(z, initParams, params);
+        if (cs) G_ToTry(cs, initParams, z);
+        if (ctor) ctor.call(z, initParams);
         /*#}#*/
     }
     NView.merge = merge;
@@ -419,7 +405,7 @@ let Updater_Digest = (view, digesting) => {
  */
 
 
-function View(id, owner, ops, node, me) {
+function View(id, owner, ops, me) {
     me = this;
     me.owner = owner;
     me.id = id;
@@ -443,10 +429,7 @@ function View(id, owner, ops, node, me) {
     me['@{view#updater.keys}'] = {};
     /*#if(modules.viewMerge){#*/
     id = View._;
-    if (id) G_ToTry(id, [ops, {
-        node,
-        deep: !me.tmpl
-    }], me);
+    if (id) G_ToTry(id, ops, me);
     /*#}#*/
 }
 G_Assign(View, {
@@ -985,6 +968,9 @@ G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
      */
     parse(origin) {
         return G_ParseExpr(origin, this['@{view#updater.ref.data}']);
+    },
+    changed() {
+        return this['@{view#updater.data.changed}'];
     }
     /*#}#*/
     /**

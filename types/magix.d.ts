@@ -763,6 +763,10 @@ declare namespace Magix {
          */
         altered(): boolean
         /**
+         * 检测放入的数据有没有引起变化
+         */
+        changed(): boolean
+        /**
          * 得到模板中@符号对应的原始数据
          * @param data 数据对象
          */
