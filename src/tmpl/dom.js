@@ -296,19 +296,36 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
                 let updateAttribute = newStaticAttrKey ? newStaticAttrKey != oldNode.getAttribute(G_Tag_Attr_Key) : I_AttrDiff(oldNode, newNode),
                     updateChildren, unmountOld,
                     oldVf = Vframe_Vframes[oldNode.id],
-                    assign,
                     view,
                     uri = newMxView && G_ParseUri(newMxView),
                     params,
-                    htmlChanged, paramsChanged;
+                    htmlChanged, paramsChanged, assign;
                 if (newMxView && oldVf &&
                     (!newNode.id || newNode.id == oldNode.id) &&
                     oldVf['@{vframe#view.path}'] == uri[G_PATH] &&
                     (view = oldVf['@{vframe#view.entity}'])) {
                     htmlChanged = newHTML != oldVf['@{vframe#template}'];
                     paramsChanged = newMxView != oldVf[G_PATH];
+                    assign = oldNode.getAttribute(G_Tag_View_Key);
+                    //如果组件内html没改变，参数也没改变
+                    //我们要检测引用参数是否发生了改变
+                    if (!htmlChanged && !paramsChanged && assign) {
+                        //对于mxv属性，带value的必定是组件
+                        //所以对组件，我们只检测参数与html，所以组件的hasMXV=0
+                        hasMXV = 0;
+                        params = assign.split(G_COMMA);
+                        for (assign of params) {
+                            //支持模板内使用this获取整个数据对象
+                            //如果使用this来传递数据，我们把this的key处理成#号
+                            //遇到#号则任意的数据改变都需要更新当前这个组件
+                            if (assign == G_HashKey || G_Has(keys, assign)) {
+                                paramsChanged = 1;
+                                break;
+                            }
+                        }
+                    }
                     //目前属性变化并不更新view,如果要更新，只需要再判断下updateAttribute即可
-                    if (paramsChanged || htmlChanged || hasMXV || updateAttribute) {
+                    if (paramsChanged || htmlChanged || updateAttribute) {
                         assign = view['@{view#rendered}'] && view['@{view#assign.fn}'];
                         if (assign) {
                             params = uri[G_PARAMS];
@@ -326,8 +343,8 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys, hasMXV) => {
                                 attr: updateAttribute,
                                 //mxv: hasMXV,
                                 inner: htmlChanged,
-                                query: paramsChanged,
-                                keys
+                                query: paramsChanged/*,
+                                keys*/
                             };
                             //updateAttribute = 1;
                             /*if (updateAttribute) {
