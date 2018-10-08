@@ -256,11 +256,9 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
                             '@{view#observe.router}': 1,
                             '@{view#resource}': 1,
                             '@{view#sign}': 1,
-                            '@{view#updater.data.changed}': 1,
                             '@{view#updater.data}': 1,
                             '@{view#updater.ref.data}': 1,
-                            '@{view#updater.digesting.list}': 1,
-                            '@{view#updater.keys}': 1
+                            '@{view#updater.digesting.list}': 1
                         };
                         for (let p in view) {
                             if (G_Has(view, p) && viewProto[p]) {
@@ -347,13 +345,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
             v['@{view#sign}']--;
             node = G_GetById(id);
             if (node && me['@{vframe#alter.node}'] /*&&!keepPreHTML*/) { //如果$v本身是没有模板的，也需要把节点恢复到之前的状态上：只有保留模板且$v有模板的情况下，这条if才不执行，否则均需要恢复节点的html，即$v安装前什么样，销毁后把节点恢复到安装前的情况
-                /*#if(!modules.keepHTML){#*/
-                /*#if(modules.naked){#*/
                 node.innerHTML = me['@{vframe#template}'];
-                /*#}else{#*/
-                $(node).html(me['@{vframe#template}']);
-                /*#}#*/
-                /*#}#*/
             }
             if (reset)
                 Vframe_GlobalAlter = 0;

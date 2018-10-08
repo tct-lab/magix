@@ -50,6 +50,7 @@ define('magix', () => {
     /*#}#*/
     Inc('../tmpl/vframe');
     Inc('../tmpl/body');
+    Inc('../tmpl/async');
     /*#if(modules.updaterQuick){#*/
     Inc('../tmpl/quick');
     Inc('../tmpl/vdom');

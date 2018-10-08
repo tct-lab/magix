@@ -255,7 +255,23 @@ let View_IsObserveChanged = view => {
     return res;
 };
 /*#}#*/
-
+if (DEBUG) {
+    var Updater_CheckInput = (view, html) => {
+        if (/<(?:input|textarea|select)/i.test(html)) {
+            let url = G_ParseUri(view.owner.path);
+            let found = false, hasParams = false;
+            for (let p in url.params) {
+                hasParams = true;
+                if (url.params[p][0] == G_SPLITER) {
+                    found = true;
+                }
+            }
+            if (hasParams && !found) {
+                console.warn('[!use at to pass parameter] path:' + view.owner.path + ' at ' + (view.owner.parent().path));
+            }
+        }
+    };
+}
 let Updater_EM = {
     '&': 'amp',
     '<': 'lt',
@@ -289,91 +305,123 @@ let Updater_EncodeURI = v => encodeURIComponent(Updater_Safeguard(v)).replace(Up
 let Updater_QR = /[\\'"]/g;
 let Updater_EncodeQ = v => Updater_Safeguard(v).replace(Updater_QR, '\\$&');
 
-/*#if(!modules.updaterAsync){#*/
-let Updater_Digest = (view, digesting) => {
-    let keys = updater['@{updater#keys}'],
-        changed = updater['@{updater#data.changed}'],
-        selfId = updater['@{updater#view.id}'],
+/*#if(modules.updaterAsync){#*/
+let Updater_Digest_Async = (view, resolve) => {
+    let keys = view['@{view#updater.keys}'],
+        changed = view['@{view#updater.data.changed}'],
+        selfId = view.id,
         vf = Vframe_Vframes[selfId],
-        view = vf && vf['@{vframe#view.entity}'],
-        ref = { d: [], v: [] },
+        ref = { d: [], v: [], n: [] },
         node = G_GetById(selfId),
-        tmpl, vdom, data = updater['@{updater#data}'],
-        refData = updater['@{updater#ref.data}'],
-        redigest = trigger => {
-            if (digesting.i < digesting.length) {
-                Updater_Digest(updater, digesting);
-            } else {
-                ref = digesting.slice();
-                digesting.i = digesting.length = 0;
-                /*#if(!modules.mini){#*/
-                if (trigger) {
-                    view.fire('domready');
-                }
-                /*#}#*/
-                G_ToTry(ref);
-            }
-        };
-    digesting.i = digesting.length;
-    updater['@{updater#data.changed}'] = 0;
-    updater['@{updater#keys}'] = {};
-    if (changed &&
-        view &&
-        view['@{view#sign}'] > 0 &&
-        (tmpl = view.tmpl) && view['@{view#updater}'] == updater) {
-        //修正通过id访问到不同的对象
-        view.fire('dompatch');
+        tmpl, vdom, data = view['@{view#updater.data}'],
+        refData = view['@{view#updater.ref.data}'];
+    view['@{view#updater.data.changed}'] = 0;
+    view['@{view#updater.keys}'] = {};
+    if (changed && view['@{view#sign}'] > 0 && (tmpl = view.tmpl)) {
         delete Body_RangeEvents[selfId];
         delete Body_RangeVframes[selfId];
-        console.time('[updater time:' + selfId + ']');
-        /*#if(modules.updaterVDOM){#*/
-        /*#if(modules.updaterQuick){#*/
-        vdom = tmpl(data, refData, Q_Create, selfId, Q_Encode, Q_Safeguard, Q_EncodeURI, Q_Ref, Q_EncodeQ/*, vfsToVNodes*/);
-        //Updater_VframesToVNodes[selfId] = vfsToVNodes.reverse();
-        /*#}else{#*/
-        vdom = TO_VDOM(tmpl(data, selfId, refData));
-        /*#}#*/
-        /*#}else{#*/
-        vdom = I_GetNode(tmpl(data, selfId, refData), node);
-        /*#}#*/
-        /*#if(modules.updaterVDOM){#*/
-        V_SetChildNodes(node, updater['@{updater#vdom}'], vdom, ref, vf, keys);
-        updater['@{updater#vdom}'] = vdom;
-        /*#}else{#*/
-        I_SetChildNodes(node, vdom, ref, vf, keys);
-        /*#}#*/
-        for (vdom of ref.d) {
-            vdom[0].id = vdom[1];
-        }
-
-        for (vdom of ref.v) {
-            vdom['@{view#render.short}']();
-        }
-        if (ref.c || !view['@{view#rendered}']) {
-            view.endUpdate(selfId);
-        }
-        /*#if(!modules.mini){#*/
-        if (ref.c) {
-            /*#if(modules.naked){#*/
-            G_Trigger(G_DOCUMENT, 'htmlchanged', {
-                vId: selfId
+        Async_SetNewTask(vf, () => {
+            Async_SetNewTask(vf, () => {
+                view['@{view#updater.vdom}'] = vdom;
+                /*#if(modules.updaterAsync){#*/
+                if (DEBUG) {
+                    CheckNodes(node.childNodes, vdom['@{~v#node.children}']);
+                }
+                /*#}#*/
+                vf['@{vframe#hold.fire}'] = tmpl = ref.c || !view['@{view#rendered}'];
+                if (tmpl) {
+                    view.endUpdate(selfId);
+                }
+                /*#if(!modules.mini){#*/
+                if (ref.c) {
+                    G_Trigger(G_DOCUMENT, 'htmlchanged', {
+                        vId: selfId
+                    });
+                }
+                view.fire('domready');
+                /*#}#*/
+                if (resolve) resolve();
             });
-            /*#}else if(modules.kissy){#*/
-            G_DOC.fire('htmlchanged', {
-                vId: selfId
+            Async_AddTask(vf, () => {
+                for (data of ref.d) {
+                    data[0].id = data[1];
+                }
             });
+            refData = ([f, containerNode, oldOrNewNode, newNodeOrOldVirtualNodes, virtualNodes, oldVNode, newVNode], index) => {
+                if (f == 1) {
+                    /*#if(modules.updaterAsync){#*/
+                    newNodeOrOldVirtualNodes.push(virtualNodes);
+                    /*#}#*/
+                    containerNode.appendChild(oldOrNewNode);
+                    /*#if(modules.updaterAsync){#*/
+                    if (DEBUG) {
+                        CheckNodes(containerNode.childNodes, newNodeOrOldVirtualNodes);
+                    }
+                    /*#}#*/
+                } else if (f == 2) {
+                    /*#if(modules.updaterAsync){#*/
+                    newNodeOrOldVirtualNodes.pop();
+                    /*#}#*/
+                    containerNode.removeChild(oldOrNewNode);
+                    /*#if(modules.updaterAsync){#*/
+                    if (DEBUG) {
+                        CheckNodes(containerNode.childNodes, newNodeOrOldVirtualNodes);
+                    }
+                    /*#}#*/
+                } else if (f == 4) {
+                    /*#if(modules.updaterAsync){#*/
+                    for (index in virtualNodes) {
+                        delete virtualNodes[index];
+                    }
+                    G_Assign(virtualNodes, oldVNode);
+                    /*#}#*/
+                    containerNode.replaceChild(oldOrNewNode, newNodeOrOldVirtualNodes);
+                } else {
+                    /*#if(modules.updaterAsync){#*/
+                    for (index = virtualNodes.length; index--;) {
+                        if (virtualNodes[index] == oldVNode) {
+                            virtualNodes.splice(index, 0, newVNode);
+                            break;
+                        }
+                    }
+                    /*#}#*/
+                    containerNode.insertBefore(oldOrNewNode, newNodeOrOldVirtualNodes);
+                    /*#if(modules.updaterAsync){#*/
+                    if (DEBUG) {
+                        CheckNodes(containerNode.childNodes, virtualNodes);
+                    }
+                    /*#}#*/
+                }
+            };
+            for (data of ref.n) {
+                Async_AddTask(vf, refData, data);
+            }
+            refData = data => {
+                data['@{view#render.short}']();
+            };
+            for (data of ref.v) {
+                Async_AddTask(vf, refData, data);
+            }
+            Async_CheckStatus(selfId);
+        });
+        Async_AddTask(vf, () => {
+            /*#if(modules.updaterQuick){#*/
+            vdom = tmpl(data, Q_Create, selfId, refData, Updater_Encode, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ, G_IsArray, G_Assign);
+            if (DEBUG) {
+                Updater_CheckInput(view, vdom['@{~v#node.outer.html}']);
+            }
+            V_SetChildNodes(node, view['@{view#updater.vdom}'], vdom, ref, vf, keys);
             /*#}else{#*/
-            G_DOC.trigger({
-                type: 'htmlchanged',
-                vId: selfId
-            });
+            vdom = I_GetNode(tmpl(data, selfId, refData, Updater_Encode, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ), node);
+            if (DEBUG) {
+                Updater_CheckInput(view, vdom.innerHTML);
+            }
+            I_SetChildNodes(node, vdom, ref, vf, keys);
             /*#}#*/
-        }
-        /*#}#*/
-        console.timeEnd('[updater time:' + selfId + ']');
-        redigest(1);
+            Async_CheckStatus(selfId);
+        });
     } else {
-        redigest();
+        if (resolve) resolve();
     }
 };
 /*#}else{#*/
@@ -409,8 +457,14 @@ let Updater_Digest = (view, digesting) => {
         delete Body_RangeVframes[selfId];
         /*#if(modules.updaterQuick){#*/
         vdom = tmpl(data, Q_Create, selfId, refData, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ, G_IsArray, G_Assign);
+        if (DEBUG) {
+            Updater_CheckInput(view, vdom['@{~v#node.outer.html}']);
+        }
         /*#}else{#*/
         vdom = I_GetNode(tmpl(data, selfId, refData, Updater_Encode, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ), node);
+        if (DEBUG) {
+            Updater_CheckInput(view, vdom.innerHTML);
+        }
         /*#}#*/
         /*#if(modules.updaterQuick){#*/
         V_SetChildNodes(node, view['@{view#updater.vdom}'], vdom, ref, vf, keys);

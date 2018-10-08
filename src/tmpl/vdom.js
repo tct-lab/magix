@@ -4,6 +4,18 @@ let V_SPECIAL_PROPS = {
     option: ['selected']
 };
 
+if (DEBUG) {
+    var CheckNodes = (realNodes, vNodes) => {
+        let index = 0;
+        for (let e of realNodes) {
+            if (e.nodeName.toLowerCase() != vNodes[index].b) {
+                console.warn('real not match virtual!');
+            }
+            index++;
+        }
+    };
+}
+
 let V_TEXT_NODE = G_COUNTER;
 if (DEBUG) {
     V_TEXT_NODE = '#text';
@@ -90,7 +102,8 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                 reused = newVDOM['@{~v#node.reused}'],
                 nodes = realNode.childNodes, compareKey,
                 keyedNodes = {},
-                realIndex = 0;
+                realIndex = 0/*#if(!modules.updaterAsync){#*/,
+                oldVIndex = 0/*#}#*/;
             for (i = oldCount; i--;) {
                 oc = oldChildren[i];
                 compareKey = oc['@{~v#node.compare.key}'];
@@ -99,69 +112,97 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                     compareKey.push(nodes[i]);
                 }
             }
+            /*#if(modules.updaterAsync){#*/
+            if (DEBUG) {
+                CheckNodes(nodes, oldChildren);
+            }
+            /*#}#*/
             for (i = 0; i < newCount; i++) {
                 nc = newChildren[i];
-                oc = oldChildren[i];
+                /*#if(modules.updaterAsync){#*/
+                oc = oldChildren[realIndex];
+                /*#}else{#*/
+                oc = oldChildren[oldVIndex];
+                /*#}#*/
                 compareKey = keyedNodes[nc['@{~v#node.compare.key}']];
                 if (compareKey && (compareKey = compareKey.pop())) {
                     while (compareKey != nodes[realIndex]) {//如果找到的节点和当前不同，则移动
                         realNode.appendChild(nodes[realIndex]);
-                        oldChildren.push(oldChildren[i]);
-                        oldChildren.splice(i, 1);
-                        oc = oldChildren[i];
+                        /*#if(modules.updaterAsync){#*/
+                        oldChildren.push(oldChildren[realIndex]);
+                        oldChildren.splice(realIndex, 1);
+                        oc = oldChildren[realIndex];
+                        /*#}else{#*/
+                        oldChildren.push(oldChildren[oldVIndex]);
+                        oldChildren.splice(oldVIndex, 1);
+                        oc = oldChildren[oldVIndex];
+                        /*#}#*/
+                        /*#if(modules.updaterAsync){#*/
+                        if (DEBUG) {
+                            CheckNodes(nodes, oldChildren);
+                        }
+                        /*#}#*/
                     }
                     if (reused[oc['@{~v#node.compare.key}']]) {
                         reused[oc['@{~v#node.compare.key}']]--;
                     }
                     /*#if(modules.updaterAsync){#*/
-                    Async_AddTask(vframe, V_SetNode, nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                    Async_AddTask(vframe, V_SetNode, compareKey, realNode, oc, nc, ref, vframe, keys, oldChildren, realIndex);
                     /*#}else{#*/
-                    V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                    V_SetNode(compareKey, realNode, oc, nc, ref, vframe, keys);
                     /*#}#*/
                 } else if (oc) {//有旧节点，则更新
                     if (keyedNodes[oc['@{~v#node.compare.key}']] &&
                         reused[oc['@{~v#node.compare.key}']]) {
-                        oldChildren.splice(i, 0, nc);//插入一个占位符，在接下来的比较中才能一一对应
+                        //oldChildren.splice(i, 0, nc);//插入一个占位符，在接下来的比较中才能一一对应
                         oldCount++;
                         ref.c = 1;
-                        ref.n.push([8, realNode, V_CreateNode(nc, realNode, ref), nodes[realIndex]]);
+                        /*#if(modules.updaterAsync){#*/
+                        ref.n.push([8, realNode, V_CreateNode(nc, realNode, ref), nodes[realIndex], oldChildren, oc, nc]);
                         realIndex--;
-                        // realNode.insertBefore(V_CreateNode(nc, realNode, ref), nodes[i]);
+                        /*#}else{#*/
+                        realNode.insertBefore(V_CreateNode(nc, realNode, ref), nodes[realIndex]);
+                        oldVIndex--;
+                        /*#}#*/
                     } else {
                         /*#if(modules.updaterAsync){#*/
-                        Async_AddTask(vframe, V_SetNode, nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                        Async_AddTask(vframe, V_SetNode, nodes[realIndex], realNode, oc, nc, ref, vframe, keys, oldChildren, realIndex);
                         /*#}else{#*/
                         V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
                         /*#}#*/
                         //ref.c = 1;
                     }
                 } else {//添加新的节点
-
-                    ref.n.push([1, realNode, V_CreateNode(nc, realNode, ref)]);
-                    //realNode.appendChild(V_CreateNode(nc, realNode, ref));
+                    /*#if(modules.updaterAsync){#*/
+                    ref.n.push([1, realNode, V_CreateNode(nc, realNode, ref), oldChildren, nc]);
+                    /*#}else{#*/
+                    realNode.appendChild(V_CreateNode(nc, realNode, ref));
+                    /*#}#*/
                     ref.c = 1;
                 }
+                /*#if(!modules.updaterAsync){#*/
+                oldVIndex++;
+                /*#}#*/
                 realIndex++;
             }
             for (i = newCount; i < oldCount; i++) {
-                oi = nodes[i];//删除多余的旧节点
+                oi = nodes[realIndex--];//删除多余的旧节点
                 V_UnmountVframs(vframe, oi);
                 if (DEBUG) {
                     if (!oi.parentNode) {
                         console.error('Avoid remove node on view.destroy in digesting');
                     }
                 }
-                ref.n.push([2, realNode, oi]);
-                //realNode.removeChild(oi);
+                /*#if(modules.updaterAsync){#*/
+                ref.n.push([2, realNode, oi, oldChildren]);
+                /*#}else{#*/
+                realNode.removeChild(oi);
+                /*#}#*/
             }
         }
     } else {
         ref.c = 1;
-        lastVDOM = V_CreateNode(newVDOM, realNode, ref);
-        realNode.innerHTML = '';
-        while (lastVDOM.firstChild) {
-            realNode.appendChild(lastVDOM.firstChild);
-        }
+        realNode.innerHTML = newVDOM['@{~v#node.html}'];
     }
 };
 let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
@@ -183,8 +224,14 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
             if (lastVDOM['@{~v#node.tag}'] == V_TEXT_NODE) {
                 ref.c = 1;
                 realNode.nodeValue = newVDOM['@{~v#node.outer.html}'];
+                /*#if(modules.updaterAsync){#*/
+                lastVDOM['@{~v#node.outer.html}'] = newVDOM['@{~v#node.outer.html}'];
+                /*#}#*/
             } else if (!lastAMap[G_Tag_Key] ||
                 lastAMap[G_Tag_Key] != newAMap[G_Tag_Key]) {
+                /*#if(modules.updaterAsync){#*/
+                G_Assign(lastVDOM, Q_Create(newVDOM['@{~v#node.tag}'], lastVDOM['@{~v#node.children}'], newVDOM['@{~v#node.attrs.map}'], newVDOM['@{~v#node.self.close}']));
+                /*#}#*/
                 let newMxView = newAMap[G_MX_VIEW],
                     newHTML = newVDOM['@{~v#node.html}'];
                 let updateAttribute = lastVDOM['@{~v#node.attrs}'] != newVDOM['@{~v#node.attrs}'],
@@ -279,9 +326,11 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
             }
         } else {
             V_UnmountVframs(vframe, realNode);
-
-            ref.n.push([4, oldParent, V_CreateNode(newVDOM, oldParent, ref), realNode]);
-            //oldParent.replaceChild(V_CreateNode(newVDOM, oldParent, ref), realNode);
+            /*#if(modules.updaterAsync){#*/
+            ref.n.push([4, oldParent, V_CreateNode(newVDOM, oldParent, ref), realNode, lastVDOM, newVDOM]);
+            /*#}else{#*/
+            oldParent.replaceChild(V_CreateNode(newVDOM, oldParent, ref), realNode);
+            /*#}#*/
             ref.c = 1;
         }
     }

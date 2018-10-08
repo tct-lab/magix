@@ -7,7 +7,7 @@ author:kooboy_li@163.com
 loader:module
 enables:style,viewInit,service,ceach,router,resource,viewMerge,viewProtoMixins,defaultView,autoEndUpdate,linkage,updateTitleRouter,urlRewriteRouter,updaterQuick
 
-optionals:base,updaterDOM,serviceCombine,servicePush,tipRouter,tipLockUrlRouter,edgeRouter,forceEdgeRouter,state,cnum,viewInitAsync,configIni,viewChildren,dispatcherRecast
+optionals:base,updaterDOM,updaterAsync,serviceCombine,servicePush,tipRouter,tipLockUrlRouter,edgeRouter,forceEdgeRouter,state,cnum,viewInitAsync,configIni,viewChildren,dispatcherRecast
 */
 if (typeof DEBUG == 'undefined') window.DEBUG = true;
 let G_Type = o => Object.prototype.toString.call(o).slice(8, -1);
@@ -436,7 +436,7 @@ let G_Extend = (ctor, base, props, statics, cProto) => {
 let Safeguard = data => data;
 if (DEBUG && window.Proxy) {
     let ProxiesPool = new Map();
-    Safeguard = (data, getter, setter) => {
+    Safeguard = (data, getter, setter, root) => {
         if (G_IsPrimitive(data)) {
             return data;
         }
@@ -468,7 +468,7 @@ if (DEBUG && window.Proxy) {
                     if (!prefix && getter) {
                         getter(property);
                     }
-                    if (G_Has(target, property) &&
+                    if (!root && G_Has(target, property) &&
                         (G_IsArray(out) || G_IsObject(out))) {
                         return build(prefix + property + '.', out);
                     }
@@ -1685,7 +1685,9 @@ G_Assign(Vframe[G_PROTOTYPE], MEvent, {
                             '$l': 1,
                             '$r': 1,
                             '$a': 1,
-                            '$e': 1
+                            '$e': 1,
+                            '$d': 1,
+                            '$f': 1
                         };
                         for (let p in view) {
                             if (G_Has(view, p) && viewProto[p]) {
@@ -1699,7 +1701,7 @@ G_Assign(Vframe[G_PROTOTYPE], MEvent, {
                                     (key != 'owner' || value !== 0))) {
                                 throw new Error(`avoid write ${key} at file ${viewPath}!`);
                             }
-                        });
+                        }, true);
                     }
                     me['$v'] = view;
                     
@@ -1713,7 +1715,7 @@ G_Assign(Vframe[G_PROTOTYPE], MEvent, {
                             view['$b']();
                             if (!view.tmpl) { //无模板
                                 me['$h'] = 0; //不会修改节点，因此销毁时不还原
-                                if (!view['$f']) {
+                                if (!view['$g']) {
                                     view.endUpdate();
                                 }
                             }
@@ -1761,11 +1763,7 @@ G_Assign(Vframe[G_PROTOTYPE], MEvent, {
             v['$a']--;
             node = G_GetById(id);
             if (node && me['$h'] /*&&!keepPreHTML*/) { //如果$v本身是没有模板的，也需要把节点恢复到之前的状态上：只有保留模板且$v有模板的情况下，这条if才不执行，否则均需要恢复节点的html，即$v安装前什么样，销毁后把节点恢复到安装前的情况
-                
-                
                 node.innerHTML = me['$i'];
-                
-                
             }
             if (reset)
                 Vframe_GlobalAlter = 0;
@@ -1970,7 +1968,7 @@ G_Assign(Vframe[G_PROTOTYPE], MEvent, {
         let vf = this,
             view, fn, o, list = vf['$f'],
             key;
-        if ((view = vf['$v']) && view['$f']) { //view rendered
+        if ((view = vf['$v']) && view['$g']) { //view rendered
             result = (fn = view[name]) && G_ToTry(fn, args, view);
         } else {
             o = list[key = G_SPLITER + name];
@@ -2294,6 +2292,7 @@ let Body_DOMEventBind = (type, searchSelector, remove) => {
 };
 
 
+
 //let Q_VfToVNodes={};
 let Q_Create = (tag/*, views*/, children, props, unary) => {
     //html=tag+to_array(attrs)+children.html
@@ -2314,7 +2313,7 @@ let Q_Create = (tag/*, views*/, children, props, unary) => {
                 value = c['a'];
                 if (c['b'] == V_TEXT_NODE) {
                     if (!value) {
-                        continue;
+                        value = ' ';
                     }
                     value = Updater_Encode(value);
                 }
@@ -2396,6 +2395,18 @@ let V_SPECIAL_PROPS = {
     textarea: [G_VALUE],
     option: ['selected']
 };
+
+if (DEBUG) {
+    var CheckNodes = (realNodes, vNodes) => {
+        let index = 0;
+        for (let e of realNodes) {
+            if (e.nodeName.toLowerCase() != vNodes[index].b) {
+                console.warn('real not match virtual!');
+            }
+            index++;
+        }
+    };
+}
 
 let V_TEXT_NODE = G_COUNTER;
 if (DEBUG) {
@@ -2483,7 +2494,8 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                 reused = newVDOM['i'],
                 nodes = realNode.childNodes, compareKey,
                 keyedNodes = {},
-                realIndex = 0;
+                realIndex = 0,
+                oldVIndex = 0;
             for (i = oldCount; i--;) {
                 oc = oldChildren[i];
                 compareKey = oc['d'];
@@ -2492,61 +2504,72 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                     compareKey.push(nodes[i]);
                 }
             }
+            
             for (i = 0; i < newCount; i++) {
                 nc = newChildren[i];
-                oc = oldChildren[i];
+                
+                oc = oldChildren[oldVIndex];
+                
                 compareKey = keyedNodes[nc['d']];
                 if (compareKey && (compareKey = compareKey.pop())) {
                     while (compareKey != nodes[realIndex]) {//如果找到的节点和当前不同，则移动
                         realNode.appendChild(nodes[realIndex]);
-                        oldChildren.push(oldChildren[i]);
-                        oldChildren.splice(i, 1);
-                        oc = oldChildren[i];
+                        
+                        oldChildren.push(oldChildren[oldVIndex]);
+                        oldChildren.splice(oldVIndex, 1);
+                        oc = oldChildren[oldVIndex];
+                        
+                        
                     }
                     if (reused[oc['d']]) {
                         reused[oc['d']]--;
                     }
-                    V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                    
+                    V_SetNode(compareKey, realNode, oc, nc, ref, vframe, keys);
+                    
                 } else if (oc) {//有旧节点，则更新
                     if (keyedNodes[oc['d']] &&
                         reused[oc['d']]) {
-                        oldChildren.splice(i, 0, nc);//插入一个占位符，在接下来的比较中才能一一对应
+                        //oldChildren.splice(i, 0, nc);//插入一个占位符，在接下来的比较中才能一一对应
                         oldCount++;
                         ref.c = 1;
-                        ref.n.push([8, realNode, V_CreateNode(nc, realNode, ref), nodes[realIndex]]);
-                        realIndex--;
-                        // realNode.insertBefore(V_CreateNode(nc, realNode, ref), nodes[i]);
+                        
+                        realNode.insertBefore(V_CreateNode(nc, realNode, ref), nodes[realIndex]);
+                        oldVIndex--;
+                        
                     } else {
+                        
                         V_SetNode(nodes[realIndex], realNode, oc, nc, ref, vframe, keys);
+                        
                         //ref.c = 1;
                     }
                 } else {//添加新的节点
-
-                    ref.n.push([1, realNode, V_CreateNode(nc, realNode, ref)]);
-                    //realNode.appendChild(V_CreateNode(nc, realNode, ref));
+                    
+                    realNode.appendChild(V_CreateNode(nc, realNode, ref));
+                    
                     ref.c = 1;
                 }
+                
+                oldVIndex++;
+                
                 realIndex++;
             }
             for (i = newCount; i < oldCount; i++) {
-                oi = nodes[i];//删除多余的旧节点
+                oi = nodes[realIndex--];//删除多余的旧节点
                 V_UnmountVframs(vframe, oi);
                 if (DEBUG) {
                     if (!oi.parentNode) {
                         console.error('Avoid remove node on view.destroy in digesting');
                     }
                 }
-                ref.n.push([2, realNode, oi]);
-                //realNode.removeChild(oi);
+                
+                realNode.removeChild(oi);
+                
             }
         }
     } else {
         ref.c = 1;
-        lastVDOM = V_CreateNode(newVDOM, realNode, ref);
-        realNode.innerHTML = '';
-        while (lastVDOM.firstChild) {
-            realNode.appendChild(lastVDOM.firstChild);
-        }
+        realNode.innerHTML = newVDOM['c'];
     }
 };
 let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
@@ -2568,8 +2591,10 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
             if (lastVDOM['b'] == V_TEXT_NODE) {
                 ref.c = 1;
                 realNode.nodeValue = newVDOM['a'];
+                
             } else if (!lastAMap[G_Tag_Key] ||
                 lastAMap[G_Tag_Key] != newAMap[G_Tag_Key]) {
+                
                 let newMxView = newAMap[G_MX_VIEW],
                     newHTML = newVDOM['c'];
                 let updateAttribute = lastVDOM['f'] != newVDOM['f'],
@@ -2610,7 +2635,7 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
                         }
                     }
                     if (paramsChanged || htmlChanged || updateAttribute) {
-                        assign = view['$f'] && view['$g'];
+                        assign = view['$g'] && view['$h'];
                         //如果有assign方法,且有参数或html变化
                         if (assign) {
                             params = uri[G_PARAMS];
@@ -2664,9 +2689,9 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
             }
         } else {
             V_UnmountVframs(vframe, realNode);
-
-            ref.n.push([4, oldParent, V_CreateNode(newVDOM, oldParent, ref), realNode]);
-            //oldParent.replaceChild(V_CreateNode(newVDOM, oldParent, ref), realNode);
+            
+            oldParent.replaceChild(V_CreateNode(newVDOM, oldParent, ref), realNode);
+            
             ref.c = 1;
         }
     }
@@ -2892,7 +2917,7 @@ let View_Prepare = oView => {
         prop['$eo'] = eventsObject;
         prop['$el'] = eventsList;
         prop['$so'] = selectorObject;
-        prop['$g'] = prop.assign;
+        prop['$h'] = prop.assign;
     }
     
     return oView[G_SPLITER];
@@ -2953,14 +2978,16 @@ let Updater_EncodeURI = v => encodeURIComponent(Updater_Safeguard(v)).replace(Up
 
 let Updater_QR = /[\\'"]/g;
 let Updater_EncodeQ = v => Updater_Safeguard(v).replace(Updater_QR, '\\$&');
+
+
 let Updater_Digest = (view, digesting) => {
-    let keys = view['$h'],
-        changed = view['$i'],
+    let keys = view['$i'],
+        changed = view['$j'],
         selfId = view.id,
         vf = Vframe_Vframes[selfId],
         ref = { d: [], v: [], n: [] },
         node = G_GetById(selfId),
-        tmpl, vdom, data = view['$j'],
+        tmpl, vdom, data = view['$e'],
         refData = view['$d'],
         redigest = trigger => {
             if (digesting.i < digesting.length) {
@@ -2977,8 +3004,8 @@ let Updater_Digest = (view, digesting) => {
             }
         };
     digesting.i = digesting.length;
-    view['$i'] = 0;
-    view['$h'] = {};
+    view['$j'] = 0;
+    view['$i'] = {};
     if (changed && view['$a'] > 0 && (tmpl = view.tmpl)) {
         view.fire('dompatch');
         delete Body_RangeEvents[selfId];
@@ -3011,7 +3038,7 @@ let Updater_Digest = (view, digesting) => {
 
             有可能不需要endUpdate，所以hold fire要视情况而定
         */
-        vf['$d'] = tmpl = ref.c || !view['$f'];
+        vf['$d'] = tmpl = ref.c || !view['$g'];
         for (vdom of ref.v) {
             vdom['$b']();
         }
@@ -3030,6 +3057,7 @@ let Updater_Digest = (view, digesting) => {
         redigest();
     }
 };
+
 /**
  * View类
  * @name View
@@ -3081,15 +3109,15 @@ function View(id, owner, ops, me) {
     me['$r'] = {};
     
     me['$a'] = 1; //标识view是否刷新过，对于托管的函数资源，在回调这个函数时，不但要确保view没有销毁，而且要确保view没有刷新过，如果刷新过则不回调
-    me['$i'] = 1;
-    me['$j'] = {
+    me['$j'] = 1;
+    me['$e'] = {
         id
     };
     me['$d'] = {
         [G_SPLITER]: 1
     };
-    me['$o'] = [];
-    me['$h'] = {};
+    me['$f'] = [];
+    me['$i'] = {};
     
     id = View._;
     if (id) G_ToTry(id, ops, me);
@@ -3201,7 +3229,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
      */
     beginUpdate(id, me) {
         me = this;
-        if (me['$a'] > 0 && me['$f']) {
+        if (me['$a'] > 0 && me['$g']) {
             me.owner.unmountZone(id, 1);
             /*me.fire('prerender', {
                 id: id
@@ -3223,9 +3251,9 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
                 f = inner;
             } else {
                 
-                f = me['$f'];
+                f = me['$g'];
                 
-                me['$f'] = 1;
+                me['$g'] = 1;
             }
             
             o = me.owner;
@@ -3417,7 +3445,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
      * }
      */
     get(key, result) {
-        result = this['$j'];
+        result = this['$e'];
         if (key) {
             result = result[key];
         }
@@ -3455,7 +3483,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
      */
     set(obj, unchanged) {
         let me = this;
-        me['$i'] = G_Set(obj, me['$j'], me['$h'], unchanged) || me['$i'];
+        me['$j'] = G_Set(obj, me['$e'], me['$i'], unchanged) || me['$j'];
         return me;
     },
     /**
@@ -3470,7 +3498,8 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
      */
     digest(data, unchanged, resolve) {
         let me = this.set(data, unchanged),
-            digesting = me['$o'];
+            digesting = me['$f']
+            ;
         /*
             view:
             <div>
@@ -3486,6 +3515,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
 
             如果在digest的过程中，多次调用自身的digest，则后续的进行排队。前面的执行完成后，排队中的一次执行完毕
         */
+        
         if (resolve) {
             digesting.push(resolve);
         }
@@ -3494,6 +3524,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
         } else if (DEBUG) {
             console.warn('Avoid redigest while updater is digesting');
         }
+        
     },
     /**
      * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化
@@ -3519,7 +3550,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
      */
     snapshot() {
         let me = this;
-        me['$p'] = JSONStringify(me['$j']);
+        me['$o'] = JSONStringify(me['$e']);
         return me;
     },
     /**
@@ -3546,8 +3577,8 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
      */
     altered() {
         let me = this;
-        if (me['$p']) {
-            return me['$p'] != JSONStringify(me['$j']);
+        if (me['$o']) {
+            return me['$o'] != JSONStringify(me['$e']);
         }
     },
     /**
@@ -3555,7 +3586,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
      * @param {string} origin 源字符串
      */
     translate(data) {
-        return G_TranslateData(this['$j'], data);
+        return G_TranslateData(this['$e'], data);
     },
     /**
      * 翻译带@占位符的数据
@@ -3565,7 +3596,7 @@ G_Assign(View[G_PROTOTYPE] , MEvent, {
         return G_ParseExpr(origin, this['$d']);
     },
     changed() {
-        return this['$i'];
+        return this['$j'];
     }
     
     /**
