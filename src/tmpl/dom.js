@@ -58,9 +58,9 @@ let I_Base = I_Doc.createElement('base');
 I_Base.href = G_DOCUMENT.location.href;
 I_Doc.head.appendChild(I_Base);
 
-let I_UnmountVframs = (vf, n) => {
-    let id = IdIt(n);
-    if (id) {
+let I_UnmountVframs = (vf, n, id) => {
+    if (n.nodeType == 1) {
+        id = IdIt(n);
         if (vf['@{vframe#children}'][id]) {
             vf.unmountVframe(id, 1);
         } else {
