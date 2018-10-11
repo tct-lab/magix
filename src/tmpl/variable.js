@@ -109,6 +109,8 @@ let {
 /*#if(modules.style){#*/
 let Header = document.head;
 let Temp = document.createElement('div');
+let GA = Temp.getAttribute;
+let G_GetAttribute = (node, attr) => GA.call(node, attr);
 let View_ApplyStyle = (key, css) => {
     if (DEBUG && G_IsArray(key)) {
         for (let i = 0; i < key.length; i += 2) {
@@ -130,8 +132,11 @@ let View_ApplyStyle = (key, css) => {
         }
     }
 };
+/*#}else{#*/
+let GA = G_DOCUMENT.documentElement.getAttribute;
+let G_GetAttribute = (node, attr) => GA.call(node, attr);
 /*#}#*/
-let IdIt = n => n.nodeType == 1 ? n.getAttribute('id') || (/*#if(!modules.updaterQuick){#*/n['@{node#auto.id}'] = 1, /*#}#*/n.id = G_Id()) : G_EMPTY;
+let IdIt = n => G_GetAttribute(n, 'id') || (/*#if(!modules.updaterQuick){#*/n['@{node#auto.id}'] = 1, /*#}#*/n.id = G_Id());
 let G_ToTry = (fns, args, context, r, e) => {
     args = args || G_EMPTY_ARRAY;
     if (!G_IsArray(fns)) fns = [fns];

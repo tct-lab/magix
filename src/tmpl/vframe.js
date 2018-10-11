@@ -432,7 +432,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
         /*#if(modules.collectView){#*/
         let temp = [];
         for (vf of vframes) {
-            temp.push(vf.getAttribute(G_MX_VIEW));
+            temp.push(G_GetAttribute(vf, G_MX_VIEW));
         }
         G_Require(temp);
         /*#}#*/
@@ -440,7 +440,7 @@ G_Assign(Vframe[G_PROTOTYPE]/*#if(!modules.mini){#*/, MEvent/*#}#*/, {
             if (!vf['@{node#mounted.vframe}']) { //防止嵌套的情况下深层的view被反复实例化
                 id = IdIt(vf);
                 vf['@{node#mounted.vframe}'] = 1;
-                vfs.push([id, vf.getAttribute(G_MX_VIEW)]);
+                vfs.push([id, G_GetAttribute(vf, G_MX_VIEW)]);
             }
         }
         for ([id, vf] of vfs) {
