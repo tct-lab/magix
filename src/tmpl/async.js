@@ -16,7 +16,7 @@ let Async_Rest = 16;
         }
     }
 */
-//let Idle = /*G_WINDOW.requestIdleCallback ||*/ Timeout;
+let Idle = G_WINDOW.requestAnimationFrame || Timeout;
 let Async_CheckStatus = id => {
     let task = Async_TasksMap[id];
     if (task && task['@{~task#work.index}'] >= task.length) {
@@ -26,7 +26,7 @@ let Async_CheckStatus = id => {
     }
 };
 let Async_RunTask = (last, one, task) => {
-    last = Date.now();
+    last = G_Now();
     while (1) {
         task = Async_Tasks[0];
         if (task) {
@@ -37,8 +37,8 @@ let Async_RunTask = (last, one, task) => {
                 Async_Tasks.shift();
                 Async_CheckStatus(task['@{~task#vf.id}']);
             }
-            if (Date.now() - last > Async_Rest) {
-                Timeout(Async_RunTask);
+            if (G_Now() - last > Async_Rest) {
+                Idle(Async_RunTask);
                 break;
             }
         } else {
@@ -55,7 +55,7 @@ let Async_AddTask = (vf, fn, ...args) => {
     });
     if (!Async_Working) {
         Async_Working = 1;
-        Timeout(Async_RunTask);
+        Idle(Async_RunTask);
     }
 };
 let Async_DeleteTask = id => {

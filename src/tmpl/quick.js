@@ -63,8 +63,17 @@ let Q_Create = (tag/*, views*/, children, props, unary) => {
             } else if (prop == G_Tag_View_Key) {
                 hasMxv = 1;
             }
-            props[prop] = value;
-            outerHTML += ` ${prop}="${Updater_Encode(value)}"`;
+            if (prop == 'x-html') {
+                innerHTML = value;
+                newChildren = [{
+                    '@{~v#node.tag}': G_SPLITER,
+                    '@{~v#node.outer.html}': value
+                }];
+                delete props[prop];
+            } else {
+                props[prop] = value;
+                outerHTML += ` ${prop}="${Updater_Encode(value)}"`;
+            }
         }
         attrs = outerHTML;
         if (unary) {

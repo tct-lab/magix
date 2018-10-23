@@ -430,7 +430,7 @@ G_Assign(Service[G_PROTOTYPE], {
                         G_ToTry(one, me['@{service#last.arguments}'] = a);
                     }
                 }
-            }, 0);
+            },0);
         }
     },
     /**

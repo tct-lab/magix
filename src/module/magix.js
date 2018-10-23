@@ -69,7 +69,7 @@ Inc('../tmpl/vdom');
 Inc('../tmpl/dom');
 /*#}#*/
 Inc('../tmpl/view');
-/*#if(modules.service){#*/
+/*#if(modules.service||modules.updaterAsync){#*/
 let G_Now = Date.now;
 Inc('../tmpl/service');
 /*#if(modules.servicePush){#*/

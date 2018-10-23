@@ -323,6 +323,7 @@ let Updater_Digest_Async = (view, resolve) => {
         Async_SetNewTask(vf, () => {
             Async_SetNewTask(vf, () => {
                 view['@{view#updater.vdom}'] = vdom;
+                view['@{view#ignore.outer.html}'] = 0;
                 /*#if(modules.updaterAsync){#*/
                 if (DEBUG) {
                     CheckNodes(node.childNodes, vdom['@{~v#node.children}']);
@@ -375,7 +376,11 @@ let Updater_Digest_Async = (view, resolve) => {
                     }
                     G_Assign(virtualNodes, oldVNode);
                     /*#}#*/
-                    containerNode.replaceChild(oldOrNewNode, newNodeOrOldVirtualNodes);
+                    if (oldOrNewNode) {
+                        containerNode.replaceChild(oldOrNewNode, newNodeOrOldVirtualNodes);
+                    } else {
+                        containerNode.innerHTML = oldVNode['@{~v#node.outer.html}'];
+                    }
                 } else {
                     /*#if(modules.updaterAsync){#*/
                     for (index = virtualNodes.length; index--;) {
@@ -410,7 +415,8 @@ let Updater_Digest_Async = (view, resolve) => {
             if (DEBUG) {
                 Updater_CheckInput(view, vdom['@{~v#node.outer.html}']);
             }
-            V_SetChildNodes(node, view['@{view#updater.vdom}'], vdom, ref, vf, keys);
+            V_SetChildNodes(node, view['@{view#updater.vdom}'], vdom, ref, vf, keys, view['@{view#ignore.outer.html}']);
+            view['@{view#ignore.outer.html}'] = 1;
             /*#}else{#*/
             vdom = I_GetNode(tmpl(data, selfId, refData, Updater_Encode, Updater_Safeguard, Updater_EncodeURI, Updater_Ref, Updater_EncodeQ), node);
             if (DEBUG) {
@@ -474,17 +480,6 @@ let Updater_Digest = (view, digesting) => {
         /*#}#*/
         for (vdom of ref.d) {
             vdom[0].id = vdom[1];
-        }
-        for (vdom of ref.n) {
-            if (vdom[0] == 1) {
-                vdom[1].appendChild(vdom[2]);
-            } else if (vdom[0] == 2) {
-                vdom[1].removeChild(vdom[2]);
-            } else if (vdom[0] == 4) {
-                vdom[1].replaceChild(vdom[2], vdom[3]);
-            } else {
-                vdom[1].insertBefore(vdom[2], vdom[3]);
-            }
         }
         /*
             在dom diff patch时，如果已渲染的vframe有变化，则会在vom tree上先派发created事件，同时传递inner标志，vom tree处理alter事件派发状态，未进入created事件派发状态
