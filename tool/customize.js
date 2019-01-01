@@ -7,62 +7,8 @@ let sep = path.sep;
 let modulesReg = /\/\/#modules\s*=\s*([^\r\n]+)/;
 let incReg = /Inc\((['"])(.+)\1\);*/g;
 let modules = {
-    base: 1, //base模块
-    style: 1, //是否有样式处理
-
-    updaterDOM: 1, //dom增量更新
-    updaterQuick: 1,//quick
-    updaterAsync: 1,//
-
-    service: 1, //接口服务
-    serviceCombine: 1, //接口combine
-    servicePush: 1,//接口对象主动推送数据
-
-    router: 1, //路由模块
-    tipRouter: 1, //切换页面时，如果开发者明确告诉magix数据有改变，则会提示用户
-    tipLockUrlRouter: 1, //锁定url功能
-    edgeRouter: 1, //使用pushState
-    forceEdgeRouter: 1, //强制使用pushState
-    urlRewriteRouter: 1, //url重写
-    updateTitleRouter: 1, //支持更新document.title
-
-    state: 1, //状态
-    cnum: 1, //Cache num
-    ceach: 1, //Cache each
-
-    viewProtoMixins: 1, //支持mixins
-    defaultView: 1, //自动初始化
-    //autoEndUpdate: 1, //自动识别并结束更新。针对没有tmpl属性的view自动识别并结束更新
-    linkage: 1, //vframe上是否带父子间调用的方法，通常在移动端并不需要
-    viewInit: 1, //init方法
-    viewInitAsync: 1,//init支持promise
-    resource: 1, //资源管理
-    configIni: 1, //是否有ini配置文件
-    viewMerge: 1, //view是否提供merge方法供扩展原型链对象
-    viewChildren: 1,//是否可以序列化子节点
-    dispatcherRecast: 1//渲染拦截
+    router: 1
 };
-rs.map({
-    '@{vframe#view.entity}': '$v',
-    '@{view#selector.events.object}': '$so',
-    '@{view#shared.data}': '$sd',
-    '@{view#events.object}': '$eo',
-    '@{view#events.list}': '$el',
-    '@{view#observe.router}': '$l',
-    '@{view#observe.state}': '$os',
-    '@{vframe#children.created}': '$cr',
-    '@{vframe#children.altered}': '$ca',
-    '@{service#meta}': '$m',
-    '@{vframe#children}': '$c',
-    '@{vframe#children.count}': '$cc',
-    '@{vframe#children.ready.count}': '$rc',
-    '@{view#resource}': '$r',
-    '@{service#cache}': '$c',
-    '@{service#send}': '$s',
-    '@{vframe#mounted}': '$m',
-    '@{updater#keys}': '$k',
-    '@{updater#data.changed}': '$c'
-});
 let copyFile = (from, to, callback) => {
     let folders = path.dirname(to).split(sep);
     let p = '';
@@ -78,7 +24,7 @@ let copyFile = (from, to, callback) => {
     }
     fs.writeFileSync(to, content);
 };
-module.exports = (options, es3) => {
+module.exports = (options, cb) => {
     let enableModules = options.enableModules;
     let loaderType = options.loaderType || 'unknown';
     let tmplFile = options.tmplFile;
@@ -88,10 +34,6 @@ module.exports = (options, es3) => {
         let others = [];
         m.split(',').forEach(function (m) {
             m = m.trim();
-            map[m] = 1;
-            if (m == 'service') {
-                m = 'ceach';
-            }
             map[m] = 1;
         });
         for (let p in modules) {
@@ -117,18 +59,16 @@ module.exports = (options, es3) => {
             let file = path.resolve(dir, name + '.js');
             return fs.readFileSync(file) + '';
         });
-        let header = '\/\/#snippet;\r\n\/\/#uncheck = jsThis,jsLoop;\r\n\/\/#exclude = loader,allProcessor;\r\n/*!' + pkg.version + ' Licensed MIT*/';
+        let header = '\/\/#snippet;\r\n\/\/#exclude = all;\r\n/*!' + pkg.version + ' Licensed MIT*/';
         header += '\r\n/*\r\nauthor:kooboy_li@163.com\r\nloader:' + loaderType;
         header += '\r\nenables:' + Object.keys(m.enables);
         header += '\r\n\r\noptionals:' + m.others;
         header += '\r\n*/\r\n';
-        if (es3) {
-            m.enables.es3 = true;
-        }
         m.enables[loaderType] = true;
-        if (loaderType == 'module') {
-            m.enables.naked = true;
-        }
+        m.enables.moduleId = options.moduleId || 'magix';
         return rs.process(tmpl(header + content, m.enables));
     });
+    if (cb) {
+        cb(rs.getMap());
+    }
 };

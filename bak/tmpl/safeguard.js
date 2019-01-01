@@ -2,7 +2,7 @@ let Safeguard = data => data;
 if (DEBUG && window.Proxy) {
     let ProxiesPool = new Map();
     Safeguard = (data, getter, setter, root) => {
-        if (IsPrimitive(data)) {
+        if (G_IsPrimitive(data)) {
             return data;
         }
         let build = (prefix, o) => {
@@ -33,8 +33,8 @@ if (DEBUG && window.Proxy) {
                     if (!prefix && getter) {
                         getter(property);
                     }
-                    if (!root && Has(target, property) &&
-                        (IsArray(out) || IsObject(out))) {
+                    if (!root && G_Has(target, property) &&
+                        (G_IsArray(out) || G_IsObject(out))) {
                         return build(prefix + property + '.', out);
                     }
                     return out;

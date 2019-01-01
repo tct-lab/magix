@@ -1,11 +1,11 @@
-//like 'login<click>' or '$<click>' or '$win<scroll>' or '$win<scroll>&passive,capture'
 let View_EvtMethodReg = /^(\$?)([^<]*)<([^>]+)>(?:&(.+))?$/;
+/*#if(modules.viewProtoMixins){#*/
 let processMixinsSameEvent = (exist, additional, temp) => {
     if (exist['@{~viewmixin#list}']) {
         temp = exist;
     } else {
         temp = function (e) {
-            ToTry(temp['@{~viewmixin#list}'], e, this);
+            G_ToTry(temp['@{~viewmixin#list}'], e, this);
         };
         temp['@{~viewmixin#list}'] = [exist];
         temp['@{~viewmixin#is.mixin}'] = 1;
@@ -13,12 +13,15 @@ let processMixinsSameEvent = (exist, additional, temp) => {
     temp['@{~viewmixin#list}'] = temp['@{~viewmixin#list}'].concat(additional['@{~viewmixin#list}'] || additional);
     return temp;
 };
+/*#}#*/
+//let View_MxEvt = /\smx-(?!view|vframe)[a-z]+\s*=\s*"/g;
+/*#if(modules.resource){#*/
 let View_DestroyAllResources = (me, lastly) => {
-    let cache = me['@{~view#resource}'], //reources
+    let cache = me['@{view#resource}'], //reources
         p, c;
     for (p in cache) {
         c = cache[p];
-        if (lastly || c['@{~resources#remove.when.render}']) { //destroy
+        if (lastly || c.x) { //destroy
             View_DestroyResource(cache, p, 1);
         }
     }
@@ -28,44 +31,59 @@ let View_DestroyResource = (cache, key, callDestroy, old) => {
         fn, res;
     if (o && o != old) {
         //let processed=false;
-        res = o['@{~resources#entity}']; //entity
+        res = o.e; //entity
         fn = res.destroy;
         if (fn && callDestroy) {
-            ToTry(fn, Empty_Array, res);
+            G_ToTry(fn, G_EMPTY_ARRAY, res);
         }
         delete cache[key];
     }
     return res;
 };
+/*#}#*/
 let View_WrapMethod = (prop, fName, short, fn, me) => {
     fn = prop[fName];
     prop[fName] = prop[short] = function (...args) {
         me = this;
-        if (me['@{~view#sign}'] > 0) { //signature
-            me['@{~view#sign}']++;
+        if (me['@{view#sign}'] > 0) { //signature
+            me['@{view#sign}']++;
+            /*#if(!modules.mini){#*/
             me.fire('rendercall');
+            /*#}#*/
+            /*#if(modules.resource){#*/
             View_DestroyAllResources(me);
-            ToTry(fn, args, me);
+            /*#}#*/
+            /*#if(!modules.keepHTML){#*/
+            G_ToTry(fn, args, me);
+            /*#}else{#*/
+            fn.apply(me, args);
+            /*#}#*/
         }
     };
 };
 let View_DelegateEvents = (me, destroy) => {
-    let e, { '@{~view#events.object}': eventsObject,
-        '@{~view#selector.events.object}': selectorObject,
-        '@{~view#events.list}': eventsList, id } = me; //eventsObject
+    let e, { '@{view#events.object}': eventsObject,
+        '@{view#selector.events.object}': selectorObject,
+        '@{view#events.list}': eventsList, id } = me; //eventsObject
     for (e in eventsObject) {
         Body_DOMEventBind(e, selectorObject[
             e], destroy);
     }
-    eventsObject = destroy ? RemoveEventListener : AddEventListener;
     for (e of eventsList) {
-        eventsObject(e['@{~xevent#element}'], e['@{~xevent#name}'], e['@{~xevent#callback}'], id, e['@{~xevent#modifier}'], me);
+        G_DOMEventLibBind(e.e, e.n, G_DOMGlobalProcessor, destroy, {
+            i: id,
+            v: me,
+            f: e.f,
+            m: e.m,
+            e: e.e
+        });
     }
 };
 let View_Globals = {
-    win: Doc_Window,
-    doc: Doc_Document
+    win: G_WINDOW,
+    doc: G_DOCUMENT
 };
+/*#if(modules.viewProtoMixins||modules.viewMerge){#*/
 let View_MergeMixins = (mixins, proto, ctors) => {
     let temp = {}, p, node, fn, exist;
     for (node of mixins) {
@@ -81,21 +99,22 @@ let View_MergeMixins = (mixins, proto, ctors) => {
                 } else {
                     fn['@{~viewmixin#is.mixin}'] = 1;
                 }
-            } else if (DEBUG && exist && p != 'extend' && p != Spliter) { //只在开发中提示
-                Mx_Cfg.error(Error('merge duplicate:' + p));
+            } else if (DEBUG && exist && p != 'extend' && p != G_SPLITER) { //只在开发中提示
+                Magix_Cfg.error(Error('merge duplicate:' + p));
             }
             temp[p] = fn;
         }
     }
     for (p in temp) {
-        if (!Has(proto, p)) {
+        if (!G_Has(proto, p)) {
             proto[p] = temp[p];
         }
     }
 };
+/*#}#*/
 function merge(...args) {
-    let me = this, _ = me['@{~view-factory#ctors}'] || (me['@{~view-factory#ctors}'] = []);
-    View_MergeMixins(args, me[Prototype], _);
+    let me = this, _ = me._ || (me._ = []);
+    View_MergeMixins(args, me[G_PROTOTYPE], _);
     return me;
 }
 
@@ -103,21 +122,27 @@ function extend(props, statics) {
     let me = this;
     props = props || {};
     let ctor = props.ctor;
+    /*#if(modules.viewProtoMixins){#*/
     let ctors = [];
     if (ctor) ctors.push(ctor);
-    function NView(viewId, rootNode, ownerVf, initParams, mixinCtors, cs, z, concatCtors) {
-        me.call(z = this, viewId, rootNode, ownerVf, initParams, mixinCtors);
-        cs = NView['@{~view-factory#ctors}'];
-
-        if (cs) ToTry(cs, initParams, z);
+    /*#}#*/
+    function NView(nodeId, ownerVf, initParams/*#if(modules.viewProtoMixins){#*/, mixinCtors /*#}#*/, cs, z/*#if(modules.viewProtoMixins){#*/, concatCtors/*#}#*/) {
+        me.call(z = this, nodeId, ownerVf, initParams/*#if(modules.viewProtoMixins){#*/, mixinCtors/*#}#*/);
+        cs = NView._;
+        /*#if(modules.viewProtoMixins){#*/
+        if (cs) G_ToTry(cs, initParams, z);
         concatCtors = ctors.concat(mixinCtors);
         if (concatCtors.length) {
-            ToTry(concatCtors, initParams, z);
+            G_ToTry(concatCtors, initParams, z);
         }
+        /*#}else{#*/
+        if (cs) G_ToTry(cs, initParams, z);
+        if (ctor) ctor.call(z, initParams);
+        /*#}#*/
     }
     NView.merge = merge;
     NView.extend = extend;
-    return Extend(NView, me, props, statics);
+    return G_Extend(NView, me, props, statics);
 }
 /**
  * 预处理view
@@ -125,18 +150,20 @@ function extend(props, statics) {
  * @param  {Vom} vom vom
  */
 let View_Prepare = oView => {
-    if (!oView[Spliter]) { //只处理一次
-        oView[Spliter] = [];
-        let prop = oView[Prototype],
+    if (!oView[G_SPLITER]) { //只处理一次
+        oView[G_SPLITER] = /*#if(modules.viewProtoMixins){#*/[] /*#}else{#*/ 1 /*#}#*/;
+        let prop = oView[G_PROTOTYPE],
             currentFn, matches, selectorOrCallback, events, eventsObject = {},
             eventsList = [],
             selectorObject = {},
             node, isSelector, p, item, mask, mod, modifiers;
 
+        /*#if(modules.viewProtoMixins){#*/
         matches = prop.mixins;
         if (matches) {
-            View_MergeMixins(matches, prop, oView[Spliter]);
+            View_MergeMixins(matches, prop, oView[G_SPLITER]);
         }
+        /*#}#*/
         for (p in prop) {
             currentFn = prop[p];
             matches = p.match(View_EvtMethodReg);
@@ -144,22 +171,22 @@ let View_Prepare = oView => {
                 [, isSelector, selectorOrCallback, events, modifiers] = matches;
                 mod = {};
                 if (modifiers) {
-                    modifiers = modifiers.split(Comma);
+                    modifiers = modifiers.split(G_COMMA);
                     for (item of modifiers) {
                         mod[item] = true;
                     }
                 }
-                events = events.split(Comma);
+                events = events.split(G_COMMA);
                 for (item of events) {
                     node = View_Globals[selectorOrCallback];
                     mask = 1;
                     if (isSelector) {
                         if (node) {
                             eventsList.push({
-                                '@{~xevent#callback}': currentFn,
-                                '@{~xevent#element}': node,
-                                '@{~xevent#name}': item,
-                                '@{~xevent#modifier}': mod
+                                f: currentFn,
+                                e: node,
+                                n: item,
+                                m: mod
                             });
                             continue;
                         }
@@ -174,30 +201,60 @@ let View_Prepare = oView => {
                         }
                     }
                     eventsObject[item] = eventsObject[item] | mask;
-                    item = selectorOrCallback + Spliter + item;
+                    item = selectorOrCallback + G_SPLITER + item;
                     node = prop[item];
+                    /*#if(modules.viewProtoMixins){#*/
                     //for in 就近遍历，如果有则忽略
                     if (!node) { //未设置过
                         prop[item] = currentFn;
                     } else if (node['@{~viewmixin#is.mixin}']) { //现有的方法是mixins上的
                         if (currentFn['@{~viewmixin#is.mixin}']) { //2者都是mixins上的事件，则合并
                             prop[item] = processMixinsSameEvent(currentFn, node);
-                        } else if (Has(prop, p)) { //currentFn方法不是mixin上的，也不是继承来的，在当前view上，优先级最高
+                        } else if (G_Has(prop, p)) { //currentFn方法不是mixin上的，也不是继承来的，在当前view上，优先级最高
                             prop[item] = currentFn;
                         }
                     }
+                    /*#}else{#*/
+                    if (!node) {
+                        prop[item] = currentFn;
+                    }
+                    /*#}#*/
                 }
             }
         }
         //console.log(prop);
-        View_WrapMethod(prop, 'render', '@{~view#render.short}');
-        prop['@{~view#events.object}'] = eventsObject;
-        prop['@{~view#events.list}'] = eventsList;
-        prop['@{~view#selector.events.object}'] = selectorObject;
-        prop['@{~view#assign.fn}'] = prop.assign;
+        View_WrapMethod(prop, 'render', '@{view#render.short}');
+        prop['@{view#events.object}'] = eventsObject;
+        prop['@{view#events.list}'] = eventsList;
+        prop['@{view#selector.events.object}'] = selectorObject;
+        prop['@{view#assign.fn}'] = prop.assign;
     }
-    return oView[Spliter];
+    /*#if(modules.viewProtoMixins){#*/
+    return oView[G_SPLITER];
+    /*#}#*/
 };
+/*#if(modules.router){#*/
+let View_IsObserveChanged = view => {
+    let loc = view['@{view#observe.router}'];
+    let res, i, params;
+    if (loc.f) {
+        if (loc.p) {
+            res = Router_LastChanged[G_PATH];
+        }
+        if (!res && loc.k) {
+            params = Router_LastChanged[G_PARAMS];
+            for (i of loc.k) {
+                res = G_Has(params, i);
+                if (res) break;
+            }
+        }
+        // if (res && loc.c) {
+        //     loc.c.call(view);
+        // }
+    }
+    return res;
+};
+/*#}#*/
 
 /**
  * View类
@@ -237,29 +294,34 @@ let View_Prepare = oView => {
  */
 
 
-function View(id, root, owner, ops, me) {
+function View(id, owner, ops, me) {
     me = this;
-    me.root = root;
     me.owner = owner;
     me.id = id;
     /*#if(modules.router){#*/
-    me['@{~view#observe.router}'] = {
-        '@{~view-router#observe.params}': []
+    me['@{view#observe.router}'] = {
+        k: []
     };
     /*#}#*/
-    me['@{~view#resource}'] = {};
-    me['@{~view#sign}'] = 1; //标识view是否刷新过，对于托管的函数资源，在回调这个函数时，不但要确保view没有销毁，而且要确保view没有刷新过，如果刷新过则不回调
-    me['@{~view#updater.data.changed}'] = 1;
-    me['@{~view#updater.data}'] = {
+    /*#if(modules.resource){#*/
+    me['@{view#resource}'] = {};
+    /*#}#*/
+    me['@{view#sign}'] = 1; //标识view是否刷新过，对于托管的函数资源，在回调这个函数时，不但要确保view没有销毁，而且要确保view没有刷新过，如果刷新过则不回调
+    me['@{view#updater.data.changed}'] = 1;
+    me['@{view#updater.data}'] = {
         id
     };
-    me['@{~view#updater.ref.data}'] = new Map();
-    me['@{~view#updater.digesting.list}'] = [];
-    me['@{~view#updater.keys}'] = {};
-    id = View['@{~view-factory#ctors}'];
-    if (id) ToTry(id, ops, me);
+    me['@{view#updater.ref.data}'] = {
+        [G_SPLITER]: 1
+    };
+    me['@{view#updater.digesting.list}'] = [];
+    me['@{view#updater.keys}'] = {};
+    /*#if(modules.viewMerge){#*/
+    id = View._;
+    if (id) G_ToTry(id, ops, me);
+    /*#}#*/
 }
-Assign(View, {
+G_Assign(View, {
     /**
      * @lends View
      */
@@ -292,7 +354,9 @@ Assign(View, {
      *
      *
      */
+    /*#if(modules.viewMerge){#*/
     merge,
+    /*#}#*/
     /**
      * 继承
      * @param  {Object} [props] 原型链上的方法或属性对象
@@ -325,22 +389,19 @@ Assign(View, {
      */
     extend
 });
-Assign(View[Prototype], MxEvent, {
+G_Assign(View[G_PROTOTYPE] /*#if(!modules.mini){#*/, MEvent/*#}#*/, {
     /**
      * @lends View#
      */
+    /*#if(modules.viewInit){#*/
     /**
      * 初始化调用的方法
      * @beta
      * @module viewInit
      * @param {Object} extra 外部传递的数据对象
      */
-    init: Noop,
-    /**
-     * 渲染view，供最终view开发者覆盖
-     * @function
-     */
-    render: Noop,
+    init: G_NOOP,
+    /*#}#*/
     /*
      * 包装mx-event事件，比如把mx-click="test<prevent>({key:'field'})" 包装成 mx-click="magix_vf_root^test<prevent>({key:'field})"，以方便识别交由哪个view处理
      * @function
@@ -350,13 +411,13 @@ Assign(View[Prototype], MxEvent, {
      * @example
      * View.extend({
      *     'del&lt;click&gt;':function(e){
-     *         S.one(HashKey+e.currentId).remove();
+     *         S.one(G_HashKey+e.currentId).remove();
      *     },
      *     'addNode&lt;click&gt;':function(e){
      *         let tmpl='&lt;div mx-click="del"&gt;delete&lt;/div&gt;';
      *         //因为tmpl中有mx-click，因此需要下面这行代码进行处理一次
      *         tmpl=this.wrapEvent(tmpl);
-     *         S.one(HashKey+e.currentId).append(tmpl);
+     *         S.one(G_HashKey+e.currentId).append(tmpl);
      *     }
      * });
      */
@@ -364,28 +425,52 @@ Assign(View[Prototype], MxEvent, {
      * 通知当前view即将开始进行html的更新
      * @param {String} [id] 哪块区域需要更新，默认整个view
      */
-    beginUpdate(node, me) {
+    beginUpdate(id, me) {
         me = this;
-        if (me['@{~view#sign}'] > 0 && me['@{~view#rendered}']) {
-            me.owner.unmountZone(node);
+        if (me['@{view#sign}'] > 0 && me['@{view#rendered}']) {
+            me.owner.unmountZone(id, 1);
+            /*me.fire('prerender', {
+                id: id
+            });*/
         }
     },
     /**
      * 通知当前view结束html的更新
      * @param {String} [id] 哪块区域结束更新，默认整个view
      */
-    endUpdate(node, me, o, f) {
+    endUpdate(id, inner, me /*#if(modules.linkage){#*/, o, f /*#}#*/) {
         me = this;
-        if (me['@{~view#sign}'] > 0) {
-            f = me['@{~view#rendered}'];
-            me['@{~view#rendered}'] = 1;
-            o = me.owner;
-            o.mountZone(node);
-            if (!f) {
-                Timeout(me.wrapAsync(Vframe_RunInvokes), 0, o);
+        if (me['@{view#sign}'] > 0) {
+            id = id || me.id;
+            /*me.fire('rendered', {
+                id
+            });*/
+            if (inner) {
+                f = inner;
+            } else {
+                /*#if(modules.linkage){#*/
+                f = me['@{view#rendered}'];
+                /*#}#*/
+                me['@{view#rendered}'] = 1;
             }
+            /*#if(modules.linkage){#*/
+            o = me.owner;
+            o.mountZone(id, inner);
+            if (!f) {
+                /*#if(modules.es3){#*/
+                Timeout(me.wrapAsync(() => {
+                    Vframe_RunInvokes(o);
+                }), 0);
+                /*#}else{#*/
+                Timeout(me.wrapAsync(Vframe_RunInvokes), 0, o);
+                /*#}#*/
+            }
+            /*#}else{#*/
+            me.owner.mountZone(id, inner);
+            /*#}#*/
         }
     },
+    /*#if(!modules.mini){#*/
     /**
      * 包装异步回调
      * @param  {Function} fn 异步回调的function
@@ -405,121 +490,15 @@ Assign(View[Prototype], MxEvent, {
      */
     wrapAsync(fn, context) {
         let me = this;
-        let sign = me['@{~view#sign}'];
+        let sign = me['@{view#sign}'];
         return (...a) => {
-            if (sign > 0 && sign == me['@{~view#sign}']) {
+            if (sign > 0 && sign == me['@{view#sign}']) {
                 return fn.apply(context || me, a);
             }
         };
     },
-    /**
-     * 让view帮你管理资源，强烈建议对组件等进行托管
-     * @param {String} key 资源标识key
-     * @param {Object} res 要托管的资源
-     * @param {Boolean} [destroyWhenCalleRender] 调用render方法时是否销毁托管的资源
-     * @return {Object} 返回托管的资源
-     * @beta
-     * @module resource
-     * @example
-     * View.extend({
-     *     render: function(){
-     *         let me = this;
-     *         let dropdown = new Dropdown();
-     *
-     *         me.capture('dropdown',dropdown,true);
-     *     },
-     *     getTest: function(){
-     *         let dd = me.capture('dropdown');
-     *         console.log(dd);
-     *     }
-     * });
-     */
-    capture(key, res, destroyWhenCallRender, cache) {
-        cache = this['@{~view#resource}'];
-        if (res) {
-            View_DestroyResource(cache, key, 1, res);
-            cache[key] = {
-                '@{~resources#entity}': res,
-                '@{~resources#remove.when.render}': destroyWhenCallRender
-            };
-            //service托管检查
-            if (DEBUG && res && (res.id + Empty).indexOf('\x1es') === 0) {
-                res.__captured = 1;
-                if (!destroyWhenCallRender) {
-                    console.warn('beware! May be you should set destroyWhenCallRender = true');
-                }
-            }
-        } else {
-            cache = cache[key];
-            res = cache && cache['@{~resources#entity}'];
-        }
-        return res;
-    },
-    /**
-     * 释放管理的资源
-     * @param  {String} key 托管时的key
-     * @param  {Boolean} [destroy] 是否销毁资源
-     * @return {Object} 返回托管的资源，无论是否销毁
-     * @beta
-     * @module resource
-     */
-    release(key, destroy) {
-        return View_DestroyResource(this['@{~view#resource}'], key, destroy);
-    },
+    /*#}#*/
     /*#if(modules.router){#*/
-    /**
-     * 离开提示
-     * @param  {String} msg 提示消息
-     * @param  {Function} fn 是否提示的回调
-     * @beta
-     * @module tipRouter
-     * @example
-     * let Magix = require('magix');
-     * module.exports = Magix.View.extend({
-     *     init:function(){
-     *         this.leaveTip('页面数据未保存，确认离开吗？',function(){
-     *             return true;//true提示，false，不提示
-     *         });
-     *     }
-     * });
-     */
-    leaveTip(msg, fn) {
-        let me = this;
-        let changeListener = e => {
-            let a = '@{~tip#router.change}', // a for router change
-                b = '@{~tip#view.unload}'; // b for viewunload change
-            if (e.type != Change) {
-                a = '@{~tip#view.unload}';
-                b = '@{~tip#router.change}';
-            }
-            if (changeListener[a]) {
-                e.prevent();
-                e.reject();
-            } else if (fn()) {
-                e.prevent();
-                changeListener[b] = 1;
-                me.leaveConfirm(() => {
-                    changeListener[b] = 0;
-                    e.resolve();
-                }, () => {
-                    changeListener[b] = 0;
-                    e.reject();
-                }, msg);
-            }
-        };
-        let unloadListener = e => {
-            if (fn()) {
-                e.msg = msg;
-            }
-        };
-        Router.on(Change, changeListener);
-        Router.on(Page_Unload, unloadListener);
-        me.on('unload', changeListener);
-        me.on('destroy', () => {
-            Router.off(Change, changeListener);
-            Router.off(Page_Unload, unloadListener);
-        });
-    },
     /**
      * 监视地址栏中的参数或path，有变动时，才调用当前view的render方法。通常情况下location有变化不会引起当前view的render被调用，所以你需要指定地址栏中哪些参数有变化时才引起render调用，使得view只关注与自已需要刷新有关的参数
      * @param {Array|String|Object} params  数组字符串
@@ -550,16 +529,140 @@ Assign(View[Prototype], MxEvent, {
     observeLocation(params, isObservePath) {
         let me = this,
             loc;
-        loc = me['@{~view#observe.router}'];
-        loc['@{~view-router#observed}'] = 1;
-        if (IsObject(params)) {
-            isObservePath = params[Path];
-            params = params[Params];
+        loc = me['@{view#observe.router}'];
+        loc.f = 1;
+        if (G_IsObject(params)) {
+            isObservePath = params[G_PATH];
+            params = params[G_PARAMS];
         }
-        loc['@{~view-router#observe.path}'] = isObservePath;
+        //if (isObservePath) {
+        loc.p = isObservePath;
+        //}
         if (params) {
-            loc['@{~view-router#observe.params}'] = (params + Empty).split(Comma);
+            loc.k = (params + G_EMPTY).split(G_COMMA);
         }
+    },
+    /*#}#*/
+    /*#if(modules.state){#*/
+    /*#if(!modules.simpleState){#*/
+    /**
+     * 监视Magix.State中的数据变化
+     * @param  {String|Array} keys 数据对象的key
+     */
+    observeState(keys) {
+        this['@{view#observe.state}'] = (keys + G_EMPTY).split(G_COMMA);
+    },
+    /*#}#*/
+    /*#}#*/
+    /*#if(modules.resource){#*/
+    /**
+     * 让view帮你管理资源，强烈建议对组件等进行托管
+     * @param {String} key 资源标识key
+     * @param {Object} res 要托管的资源
+     * @param {Boolean} [destroyWhenCalleRender] 调用render方法时是否销毁托管的资源
+     * @return {Object} 返回托管的资源
+     * @beta
+     * @module resource
+     * @example
+     * View.extend({
+     *     render: function(){
+     *         let me = this;
+     *         let dropdown = new Dropdown();
+     *
+     *         me.capture('dropdown',dropdown,true);
+     *     },
+     *     getTest: function(){
+     *         let dd = me.capture('dropdown');
+     *         console.log(dd);
+     *     }
+     * });
+     */
+    capture(key, res, destroyWhenCallRender, cache) {
+        cache = this['@{view#resource}'];
+        if (res) {
+            View_DestroyResource(cache, key, 1, res);
+            cache[key] = {
+                e: res,
+                x: destroyWhenCallRender
+            };
+            //service托管检查
+            if (DEBUG && res && (res.id + G_EMPTY).indexOf('\x1es') === 0) {
+                res['@{service#captured}'] = 1;
+                if (!destroyWhenCallRender) {
+                    console.warn('beware! May be you should set destroyWhenCallRender = true');
+                }
+            }
+        } else {
+            cache = cache[key];
+            res = cache && cache.e;
+        }
+        return res;
+    },
+    /**
+     * 释放管理的资源
+     * @param  {String} key 托管时的key
+     * @param  {Boolean} [destroy] 是否销毁资源
+     * @return {Object} 返回托管的资源，无论是否销毁
+     * @beta
+     * @module resource
+     */
+    release(key, destroy) {
+        return View_DestroyResource(this['@{view#resource}'], key, destroy);
+    },
+    /*#}#*/
+    /*#if(modules.tipRouter){#*/
+    /**
+     * 离开提示
+     * @param  {String} msg 提示消息
+     * @param  {Function} fn 是否提示的回调
+     * @beta
+     * @module tipRouter
+     * @example
+     * let Magix = require('magix');
+     * module.exports = Magix.View.extend({
+     *     init:function(){
+     *         this.leaveTip('页面数据未保存，确认离开吗？',function(){
+     *             return true;//true提示，false，不提示
+     *         });
+     *     }
+     * });
+     */
+    leaveTip(msg, fn) {
+        let me = this;
+        let changeListener = e => {
+            let a = '@{~tip#router.change}', // a for router change
+                b = '@{~tip#view.unload}'; // b for viewunload change
+            if (e.type != G_CHANGE) {
+                a = '@{~tip#view.unload}';
+                b = '@{~tip#router.change}';
+            }
+            if (changeListener[a]) {
+                e.prevent();
+                e.reject();
+            } else if (fn()) {
+                e.prevent();
+                changeListener[b] = 1;
+                me.leaveConfirm(() => {
+                    changeListener[b] = 0;
+                    e.resolve();
+                }, () => {
+                    changeListener[b] = 0;
+                    e.reject();
+                }, msg);
+            }
+        };
+        let unloadListener = e => {
+            if (fn()) {
+                e.msg = msg;
+            }
+        };
+        Router.on(G_CHANGE, changeListener);
+        Router.on(G_PAGE_UNLOAD, unloadListener);
+        me.on('unload', changeListener);
+        me.on('destroy', () => {
+            Router.off(G_CHANGE, changeListener);
+            Router.off(G_PAGE_UNLOAD, unloadListener);
+        });
     },
     /*#}#*/
     /**
@@ -578,6 +681,22 @@ Assign(View[Prototype], MxEvent, {
         底层api职责更单一，一个api只完成一个功能，灵活，但不方便开发者
         更新界面来讲，updater是一个高层api，但是有些功能却无法完成，如把view当成壳子或容器渲染第三方的组件，组件什么时间加载完成、渲染、更新了dom、如何通知magix等，这些问题在updater中是无解的，而setHTML这个api又不够底层，同样也无法完成一些功能，所以这个api食之无味，故删除
      */
+    /*setHTML(id, html) {
+        let me = this,
+            n, i = me.id;
+        me.beginUpdate(id);
+        if (me['@{view#sign}'] > 0) {
+            n = G_GetById(id);
+            if (n) G_HTML(n, View_SetEventOwner(html, i), i);
+        }
+        me.endUpdate(id);
+        me.fire('domready');
+    }*/
+    /**
+     * 渲染view，供最终view开发者覆盖
+     * @function
+     */
+    render: G_NOOP,
     /**
      * 获取放入的数据
      * @param  {String} [key] key
@@ -594,7 +713,7 @@ Assign(View[Prototype], MxEvent, {
      * }
      */
     get(key, result) {
-        result = this['@{~view#updater.data}'];
+        result = this['@{view#updater.data}'];
         if (key) {
             result = result[key];
         }
@@ -632,7 +751,7 @@ Assign(View[Prototype], MxEvent, {
      */
     set(obj, unchanged) {
         let me = this;
-        me['@{~view#updater.data.changed}'] = UpdateData(obj, me['@{~view#updater.data}'], me['@{~view#updater.keys}'], unchanged) || me['@{~view#updater.data.changed}'];
+        me['@{view#updater.data.changed}'] = G_Set(obj, me['@{view#updater.data}'], me['@{view#updater.keys}'], unchanged) || me['@{view#updater.data.changed}'];
         return me;
     },
     /**
@@ -646,8 +765,9 @@ Assign(View[Prototype], MxEvent, {
      * }
      */
     digest(data, unchanged, resolve) {
-        let me = this.set(data, unchanged),
-            digesting = me['@{~view#updater.digesting.list}'];
+        let me = this.set(data, unchanged)/*#if(!modules.updaterAsync){#*/,
+            digesting = me['@{view#updater.digesting.list}']
+            /*#}#*/;
         /*
             view:
             <div>
@@ -663,15 +783,19 @@ Assign(View[Prototype], MxEvent, {
 
             如果在digest的过程中，多次调用自身的digest，则后续的进行排队。前面的执行完成后，排队中的一次执行完毕
         */
+        /*#if(modules.updaterAsync){#*/
+        Updater_Digest_Async(me, resolve);
+        /*#}else{#*/
         if (resolve) {
             digesting.push(resolve);
         }
-        if (!digesting['@{~updater#digesting.count}']) {
+        if (!digesting.i) {
             Updater_Digest(me, digesting);
         } else if (DEBUG) {
             console.warn('Avoid redigest while updater is digesting');
         }
-    },
+        /*#}#*/
+    }/*#if(!modules.mini&&modules.richUpdater){#*/,
     /**
      * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化
      * @return {Updater} 返回updater
@@ -696,7 +820,7 @@ Assign(View[Prototype], MxEvent, {
      */
     snapshot() {
         let me = this;
-        me['@{~view#updater.data.string}'] = JSON_Stringify(me['@{~view#updater.data}']);
+        me['@{view#updater.data.string}'] = JSONStringify(me['@{view#updater.data}']);
         return me;
     },
     /**
@@ -723,22 +847,47 @@ Assign(View[Prototype], MxEvent, {
      */
     altered() {
         let me = this;
-        if (me['@{~view#updater.data.string}']) {
-            return me['@{~view#updater.data.string}'] != JSON_Stringify(me['@{~view#updater.data}']);
+        if (me['@{view#updater.data.string}']) {
+            return me['@{view#updater.data.string}'] != JSONStringify(me['@{view#updater.data}']);
         }
     },
     /**
      * 翻译带@占位符的数据
-     * @param {string} data 源对象
+     * @param {string} origin 源字符串
      */
     translate(data) {
-        return TranslateData(this['@{~view#updater.data}'], data);
+        return G_TranslateData(this['@{view#updater.data}'], data);
     },
     /**
      * 翻译带@占位符的数据
      * @param {string} origin 源字符串
      */
     parse(origin) {
-        return ParseExpr(origin, this['@{~view#updater.ref.data}']);
+        return G_ParseExpr(origin, this['@{view#updater.ref.data}']);
+    },
+    changed() {
+        return this['@{view#updater.data.changed}'];
     }
+    /*#}#*/
+    /**
+     * 当前view的dom就绪后触发
+     * @name View#domready
+     * @event
+     * @param {Object} e view 完成渲染后触发
+     */
+
+    /**
+     * view销毁时触发
+     * @name View#destroy
+     * @event
+     * @param {Object} e
+     */
+
+    /**
+     * 异步更新ui的方法(render)被调用前触发
+     * @name View#rendercall
+     * @event
+     * @param {Object} e
+     */
 });
+Magix.View = View;

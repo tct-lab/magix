@@ -47,6 +47,9 @@ module.exports = {
             userMap[m[p]] = 1;
         }
     },
+    getMap() {
+        return cache;
+    },
     process(tmpl) {
         tmpl = tmpl.replace(revisableReg, m => {
             let prefix = '$';

@@ -13,8 +13,7 @@ let G_Trigger = (element, type, data) => {
 };
 let G_TargetMatchSelector = (element, selector) => {
     if (!selector || !element || element.nodeType !== 1) return 0;
-    let matchesSelector = element.webkitMatchesSelector || element.mozMatchesSelector ||
-        element.oMatchesSelector || element.matchesSelector;
+    let matchesSelector = element.matchesSelector || element.webkitMatchesSelector || element.mozMatchesSelector || element.oMatchesSelector;
     return matchesSelector.call(element, selector);
 };
 let G_MxId = e => e._mx || (e._mx = G_Id('e'));

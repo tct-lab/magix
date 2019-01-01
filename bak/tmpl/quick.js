@@ -1,23 +1,27 @@
-let Q_TEXTAREA = 'textarea';
-let Q_Create = (tag, props, children, unary) => {
+
+//let Q_VfToVNodes={};
+let Q_Create = (tag/*, views*/, children, props, unary) => {
     //html=tag+to_array(attrs)+children.html
     let token;
     if (tag) {
         props = props || {};
-        let compareKey = Empty,
+        let compareKey = G_EMPTY,
             hasMxv,
             prop, value, c,
             reused = {},
             outerHTML = '<' + tag,
             attrs,
-            innerHTML = Empty,
+            innerHTML = G_EMPTY,
             newChildren = [],
             prevNode;
         if (children) {
             for (c of children) {
                 value = c['@{~v#node.outer.html}'];
                 if (c['@{~v#node.tag}'] == V_TEXT_NODE) {
-                    value = value ? Updater_Encode(value) : ' ';//无值的文本节点我们用一个空格占位，这样在innerHTML的时候才会有文本节点
+                    if (!value) {
+                        value = ' ';
+                    }
+                    value = Updater_Encode(value);
                 }
                 innerHTML += value;
                 //merge text node
@@ -32,7 +36,8 @@ let Q_Create = (tag, props, children, unary) => {
                         reused[c['@{~v#node.compare.key}']] = (reused[c['@{~v#node.compare.key}']] || 0) + 1;
                     }
                     //force diff children
-                    if (c['@{~v#node.has.mxv}']) {
+                    if (c['@{~v#node.has.mxv}'] ||
+                        V_SPECIAL_PROPS[c['@{~v#node.tag}']]) {
                         hasMxv = 1;
                     }
                     prevNode = c;
@@ -43,43 +48,49 @@ let Q_Create = (tag, props, children, unary) => {
         for (prop in props) {
             value = props[prop];
             //布尔值
-            if (value === false ||
-                value == Null) {
+            if (value === false || value == G_NULL) {
                 delete props[prop];
                 continue;
             } else if (value === true) {
-                props[prop] = value = Empty;
+                value = G_EMPTY;
             }
             if (prop == 'id') {//如果有id优先使用
                 compareKey = value;
-            } else if (prop == MX_View &&
-                value &&
-                !compareKey) {
+            } else if (prop == G_MX_VIEW && value && !compareKey) {
                 //否则如果是组件,则使用组件的路径做为key
-                compareKey = ParseUri(value)[Path];
-            } else if (prop == Tag_Static_Key) {
-                if (!compareKey) {
-                    compareKey = value;
-                }
-                //newChildren = Empty_Array;
-            } else if (prop == Tag_View_Params_Key) {
+                compareKey = G_ParseUri(value)[G_PATH];
+            } else if (prop == G_Tag_Key && !compareKey) {
+                compareKey = value;
+            } else if (prop == G_Tag_View_Key) {
                 hasMxv = 1;
             }
-            if (prop == Value &&
-                tag == Q_TEXTAREA) {
+            if (prop == 'x-html') {
                 innerHTML = value;
-            } else if (!Has(V_SKIP_PROPS, prop)) {
+                newChildren = [{
+                    '@{~v#node.tag}': G_SPLITER,
+                    '@{~v#node.outer.html}': value
+                }];
+                delete props[prop];
+            } else {
+                props[prop] = value;
                 outerHTML += ` ${prop}="${Updater_Encode(value)}"`;
             }
         }
         attrs = outerHTML;
-        outerHTML += unary ? '/>' : `>${innerHTML}</${tag}>`;
+        if (unary) {
+            outerHTML += '/>';
+        } else {
+            outerHTML += `>${innerHTML}</${tag}>`;
+        }
+        // if (props[G_MX_VIEW]) {
+        //     views.push(newChildren);
+        // }
         token = {
             '@{~v#node.outer.html}': outerHTML,
             '@{~v#node.html}': innerHTML,
             '@{~v#node.compare.key}': compareKey,
             '@{~v#node.tag}': tag,
-            '@{~v#node.has.mxv}': hasMxv || Has(V_SPECIAL_PROPS, tag),
+            '@{~v#node.has.mxv}': hasMxv,
             '@{~v#node.attrs}': attrs,
             '@{~v#node.attrs.map}': props,
             '@{~v#node.children}': newChildren,
@@ -88,8 +99,9 @@ let Q_Create = (tag, props, children, unary) => {
         };
     } else {
         token = {
-            '@{~v#node.tag}': props ? Spliter : V_TEXT_NODE,
-            '@{~v#node.outer.html}': children + Empty
+            '@{~v#node.tag}': V_TEXT_NODE,
+            //'@{~v#node.html}': children,
+            '@{~v#node.outer.html}': children + G_EMPTY
         };
     }
     return token;

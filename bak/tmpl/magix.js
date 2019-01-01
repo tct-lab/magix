@@ -1,6 +1,161 @@
-/*#if(modules.router){#*/
+let Magix_PathToObjCache = new G_Cache();
 let Magix_Booted = 0;
+//let Magix_PathCache = new G_Cache();
+let Magix_ParamsObjectTemp;
+let Magix_ParamsFn = (match, name, value) => {
+    try {
+        value = decodeURIComponent(value);
+    } catch (_magix) {
+
+    }
+    Magix_ParamsObjectTemp[name] = value;
+};
+/**
+ * 路径
+ * @param  {String} url  参考地址
+ * @param  {String} part 相对参考地址的片断
+ * @return {String}
+ * @example
+ * http://www.a.com/a/b.html?a=b#!/home?e=f   /   => http://www.a.com/
+ * http://www.a.com/a/b.html?a=b#!/home?e=f   ./     =>http://www.a.com/a/
+ * http://www.a.com/a/b.html?a=b#!/home?e=f   ../../    => http://www.a.com/
+ * http://www.a.com/a/b.html?a=b#!/home?e=f   ./../  => http://www.a.com/
+ * //g.cn/a.html
+ */
+/*let G_Path = function(url, part) {
+    let key = url + G_SPLITER + part;
+    let result = Magix_PathCache.get(key),
+        domain = G_EMPTY,
+        idx;
+    if (!Magix_PathCache.has(key)) { //有可能结果为空，url='' path='';
+        let m = url.match(Magix_ProtocalReg);
+        if (m) {
+            idx = url.indexOf(Magix_SLASH, m[0].length);
+            if (idx < 0) idx = url.length;
+            domain = url.slice(0, idx);
+            url = url.slice(idx);
+        }
+        url = url.replace(Magix_PathTrimParamsReg, G_EMPTY).replace(Magix_PathTrimFileReg, Magix_SLASH);
+        if (!part.indexOf(Magix_SLASH)) {
+            url = G_EMPTY;
+        }
+        result = url + part;
+        console.log('url', url, 'part', part, 'result', result);
+        while (Magix_PathRelativeReg.test(result)) {
+            result = result.replace(Magix_PathRelativeReg, Magix_SLASH);
+        }
+        Magix_PathCache.set(key, result = domain + result);
+    }
+    return result;
+};*/
+
+/**
+ * 把路径字符串转换成对象
+ * @param  {String} path 路径字符串
+ * @return {Object} 解析后的对象
+ * @example
+ * let obj = Magix.parseUri('/xxx/?a=b&c=d');
+ * // obj = {path:'/xxx/',params:{a:'b',c:'d'}}
+ */
+let G_ParseUri = path => {
+    //把形如 /xxx/?a=b&c=d 转换成对象 {path:'/xxx/',params:{a:'b',c:'d'}}
+    //1. /xxx/a.b.c.html?a=b&c=d  path /xxx/a.b.c.html
+    //2. /xxx/?a=b&c=d  path /xxx/
+    //3. /xxx/#?a=b => path /xxx/
+    //4. /xxx/index.html# => path /xxx/index.html
+    //5. /xxx/index.html  => path /xxx/index.html
+    //6. /xxx/#           => path /xxx/
+    //7. a=b&c=d          => path ''
+    //8. /s?src=b#        => path /s params:{src:'b'}
+    //9. a=YT3O0sPH1No=   => path '' params:{a:'YT3O0sPH1No='}
+    //10.a=YT3O0sPH1No===&b=c => path '' params:{a:'YT3O0sPH1No===',b:'c'}
+    //11. ab?a&b          => path ab  params:{a:'',b:''}
+    //12. a=b&c           => path '' params:{a:'b',c:''}
+    //13. =abc            => path '=abc'
+    //14. ab=             => path '' params:{ab:''}
+    //15. a&b             => path '' params:{a:'',b:''}
+    let r = Magix_PathToObjCache.get(path),
+        pathname;
+    if (!r) {
+        Magix_ParamsObjectTemp = {};
+        pathname = path.replace(Magix_PathTrimParamsReg, G_EMPTY);
+        if (path == pathname && Magix_IsParam.test(pathname)) pathname = G_EMPTY; //考虑 YT3O0sPH1No= base64后的pathname
+        path.replace(pathname, G_EMPTY).replace(Magix_ParamsReg, Magix_ParamsFn);
+        Magix_PathToObjCache.set(path, r = {
+            a: pathname,
+            b: Magix_ParamsObjectTemp
+        });
+    }
+    return {
+        path: r.a,
+        params: { ...r.b }
+    };
+};
+/*#if(!modules.mini){#*/
+/**
+ * 转换成字符串路径
+ * @param  {String} path 路径
+ * @param {Object} params 参数对象
+ * @param {Object} [keo] 保留空白值的对象
+ * @return {String} 字符串路径
+ * @example
+ * let str = Magix.toUri('/xxx/',{a:'b',c:'d'});
+ * // str == /xxx/?a=b&c=d
+ *
+ * let str = Magix.toUri('/xxx/',{a:'',c:2});
+ *
+ * // str == /xxx/?a=&c=2
+ *
+ * let str = Magix.toUri('/xxx/',{a:'',c:2},{c:1});
+ *
+ * // str == /xxx/?c=2
+ * let str = Magix.toUri('/xxx/',{a:'',c:2},{a:1,c:1});
+ *
+ * // str == /xxx/?a=&c=2
+ */
+let G_ToUri = (path, params, keo) => {
+    let arr = [], v, p, f;
+    for (p in params) {
+        v = params[p] + G_EMPTY;
+        if (!keo || v || G_Has(keo, p)) {
+            v = encodeURIComponent(v);
+            arr.push(f = p + '=' + v);
+        }
+    }
+    if (f) {
+        path += (path && (~path.indexOf('?') ? '&' : '?')) + arr.join('&');
+    }
+    return path;
+};
+let G_ToMap = (list, key) => {
+    let e, map = {},
+        l;
+    if (list) {
+        for (e of list) {
+            map[(key && e) ? e[key] : e] = key ? e : (map[e] | 0) + 1; //对于简单数组，采用累加的方式，以方便知道有多少个相同的元素
+        }
+    }
+    return map;
+};
 /*#}#*/
+let G_ParseCache = new G_Cache();
+let G_ParseExpr = (expr, data, result) => {
+    if (G_ParseCache.has(expr)) {
+        result = G_ParseCache.get(expr);
+    } else {
+        //jshint evil:true
+        result = G_ToTry(Function(`return ${expr}`));
+        if (expr.indexOf(G_SPLITER) > -1) {
+            G_TranslateData(data, result);
+        } else {
+            G_ParseCache.set(expr, result);
+        }
+    }
+    if (DEBUG) {
+        result = Safeguard(result);
+    }
+    return result;
+};
 /**
  * Magix对象，提供常用方法
  * @name Magix
@@ -18,6 +173,7 @@ let Magix = {
      * @param {Object} cfg.routes path与view映射关系表
      * @param {String} cfg.unmatchView 在routes里找不到匹配时使用的view，比如显示404
      * @param {String} cfg.rootId 根view的id
+     * @param {Array} cfg.exts 需要加载的扩展
      * @param {Function} cfg.error 发布版以try catch执行一些用户重写的核心流程，当出错时，允许开发者通过该配置项进行捕获。注意：您不应该在该方法内再次抛出任何错误！
      * @example
      * Magix.config({
@@ -42,10 +198,10 @@ let Magix = {
      * console.log(Magix.config('user'));
      */
     config(cfg, r) {
-        r = Mx_Cfg;
+        r = Magix_Cfg;
         if (cfg) {
-            if (IsObject(cfg)) {
-                r = Assign(r, cfg);
+            if (G_IsObject(cfg)) {
+                r = G_Assign(r, cfg);
             } else {
                 r = r[cfg];
             }
@@ -64,16 +220,37 @@ let Magix = {
      * });
      *
      */
+    /*#if(modules.router){#*/
     boot(cfg) {
-        Assign(Mx_Cfg, cfg); //先放到配置信息中，供ini文件中使用
-        /*#if(modules.router){#*/
-        Router.on(Changed, Dispatcher_NotifyChange);
-        Magix_Booted = 1;
-        Router_Bind();
-        /*#}else{#*/
-        Vframe_Root().mountView(Mx_Cfg.defaultView);
+        G_Assign(Magix_Cfg, cfg); //先放到配置信息中，供ini文件中使用
+        /*#if(modules.configIni){#*/
+        G_Require(Magix_Cfg.ini, I => {
+            G_Assign(Magix_Cfg, I, cfg);
+            /*#}#*/
+            G_Require(Magix_Cfg.exts, () => {
+                Router.on(G_CHANGED, Dispatcher_NotifyChange);
+                /*#if(modules.state&&!modules.simpleState){#*/
+                State.on(G_CHANGED, Dispatcher_NotifyChange);
+                /*#}#*/
+                Magix_Booted = 1;
+                Router_Bind();
+            });
+            /*#if(modules.configIni){#*/
+        });
         /*#}#*/
     },
+    /*#}else{#*/
+    boot(cfg) {
+        G_Assign(Magix_Cfg, cfg);
+        G_Require(Magix_Cfg.exts, () => {
+            Vframe_Root().mountView(Magix_Cfg.defaultView);
+            /*#if(modules.state&&!modules.simpleState){#*/
+            State.on(G_CHANGED, Dispatcher_NotifyChange);
+            /*#}#*/
+        });
+    },
+    /*#}#*/
+    /*#if(!modules.mini){#*/
     /**
      * 把列表转化成hash对象
      * @param  {Array} list 源数组
@@ -89,7 +266,8 @@ let Magix = {
      * console.log(map['30']);//=> {id:30}
      * //转成对象后不需要每次都遍历数组查询
      */
-    toMap: ToMap,
+    toMap: G_ToMap,
+    /*#}#*/
     /**
      * 以try cache方式执行方法，忽略掉任何异常
      * @function
@@ -140,7 +318,8 @@ let Magix = {
      *
      * // result == 'test'
      */
-    toTry: ToTry,
+    toTry: G_ToTry,
+    /*#if(!modules.mini){#*/
     /**
      * 转换成字符串路径
      * @function
@@ -163,7 +342,8 @@ let Magix = {
      *
      * // str == /xxx/?a=&c=2
      */
-    toUrl: ToUri,
+    toUrl: G_ToUri,
+    /*#}#*/
     /**
      * 把路径字符串转换成对象
      * @function
@@ -173,7 +353,7 @@ let Magix = {
      * let obj = Magix.parseUrl('/xxx/?a=b&c=d');
      * // obj = {path:'/xxx/',params:{a:'b',c:'d'}}
      */
-    parseUrl: ParseUri,
+    parseUrl: G_ParseUri,
     /*
      * 路径
      * @function
@@ -186,6 +366,7 @@ let Magix = {
      * http://www.a.com/a/b.html?a=b#!/home?e=f   ../../    => http://www.a.com/
      * http://www.a.com/a/b.html?a=b#!/home?e=f   ./../  => http://www.a.com/
      */
+    //path: G_Path,
     /**
      * 把src对象的值混入到aim对象上
      * @function
@@ -205,7 +386,7 @@ let Magix = {
      *
      * @return {Object}
      */
-    mix: Assign,
+    mix: G_Assign,
     /**
      * 检测某个对象是否拥有某个属性
      * @function
@@ -224,7 +405,8 @@ let Magix = {
      *
      * @return {Boolean} 是否拥有prop属性
      */
-    has: Has,
+    has: G_Has,
+    /*#if(!modules.mini){#*/
     /**
      * 获取对象的keys
      * @param {Object} object 获取key的对象
@@ -242,7 +424,8 @@ let Magix = {
      * // keys == ['a','b','test']
      * @return {Array}
      */
-    keys: Keys,
+    keys: G_Keys,
+    /*#}#*/
     /**
      * 判断一个节点是否在另外一个节点内，如果比较的2个节点是同一个节点，也返回true
      * @function
@@ -266,7 +449,23 @@ let Magix = {
      *
      * @return {Boolean}
      */
-    inside: NodeIn,
+    inside: G_NodeIn,
+    /**
+     * document.getElementById的简写
+     * @param {String} id
+     * @return {HTMLElement|Null}
+     * @example
+     * // html
+     * // <div id="root"></div>
+     *
+     * let node = Magix.node('root');
+     *
+     * // node => div[id='root']
+     *
+     * // node是document.getElementById的简写
+     */
+    node: G_GetById,
+    /*#if(modules.style){#*/
     /**
      * 应用样式
      * @beta
@@ -279,7 +478,8 @@ let Magix = {
      * // 样式问题可查阅这里：https://github.com/thx/magix-combine/issues/6
      *
      */
-    applyStyle: ApplyStyle,
+    applyStyle: View_ApplyStyle,
+    /*#}#*/
     /**
      * 返回全局唯一ID
      * @function
@@ -290,19 +490,16 @@ let Magix = {
      * let id = Magix.guid('mx-');
      * // id maybe mx-7
      */
-    guid: GUID,
-    Cache,
-    use: Async_Require,
-    dispatch: DispatchEvent,
-    type: Type,
-    View,
-    State,
-    Vframe,
-    Service,
-    Event: MxEvent,
-    /*#if(modules.router){#*/
-    Router,
+    /*#if(!modules.mini){#*/
+    guid: G_Id,
+    Cache: G_Cache,
+    use: G_Require,
+    dispatch(element, type, data) {
+        G_Trigger(G_GetById(element), type, data);
+    },
+    match: G_TargetMatchSelector,
+    type: G_Type,
+    nodeId: IdIt,
+    guard: Safeguard
     /*#}#*/
-    guard: Safeguard,
-    node: GetById
 };

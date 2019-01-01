@@ -1,32 +1,30 @@
-if (typeof DEBUG == 'undefined') window.DEBUG = true;
-Inc('../tmpl/naked');
-Inc('../tmpl/variable');
-Inc('../tmpl/cache');
-/*#if(modules.defaultView){#*/
-let G_DefaultView;
-/*#}#*/
-let G_Require = (name, fn) => {
+Inc('../tmpl/var_vars');
+Inc('../tmpl/var_cache');
+Inc('../tmpl/var_dom');
+Inc('../tmpl/var_path');
+let MxDefaultViewEntity;
+let Async_Require = (name, fn) => {
     if (name) {
-        /*#if(modules.defaultView){#*/
         if (MxGlobalView == name) {
-            if (!G_DefaultView) {
-                G_DefaultView = View.extend();
+            if (!MxDefaultViewEntity) {
+                MxDefaultViewEntity = View.extend();
             }
-            fn(G_DefaultView);
-        } else {/*#}#*/
-            let a = [], n, c = 0;
-            if (!G_IsArray(name)) name = [name];
-            let check = i => {
-                return v => {
-                    a[i] = v.default;
-                    c++;
-                    if (c == a.length) {
-                        fn(...a);
-                    }
+            fn(MxDefaultViewEntity);
+        } else {
+            if (!IsArray(name)) name = [name];
+            let a = [], c = 0;
+            let count = name.length,
+                paths = MX_Cfg.paths,
+                check = i => {
+                    return v => {
+                        a[i] = v.default;
+                        c++;
+                        if (c == count) {
+                            fn(...a);
+                        }
+                    };
                 };
-            };
-            let paths = Magix_Cfg.paths;
-            for (let i = name.length, f, s, p; i--;) {
+            for (let i = count, f, s, p; i--;) {
                 f = name[i];
                 s = f.indexOf('/');
                 if (s > -1) {
@@ -39,42 +37,24 @@ let G_Require = (name, fn) => {
                 }
                 import(f).then(check(i));
             }
-            /*#if(modules.defaultView){#*/
         }
-        /*#}#*/
     } else {
         fn();
     }
 };
 Inc('../tmpl/extend');
 Inc('../tmpl/safeguard');
-Inc('../tmpl/magix');
 Inc('../tmpl/event');
-/*#if(modules.state){#*/
-Inc('../tmpl/state');
-/*#}#*/
-/*#if(modules.router){#*/
 Inc('../tmpl/router');
-/*#}#*/
-/*#if(modules.router||modules.state){#*/
 Inc('../tmpl/dispatcher');
-/*#}#*/
 Inc('../tmpl/vframe');
 Inc('../tmpl/body');
-Inc('../tmpl/async');
-/*#if(modules.updaterQuick){#*/
+Inc('../tmpl/updater');
 Inc('../tmpl/quick');
 Inc('../tmpl/vdom');
-/*#}else{#*/
-Inc('../tmpl/dom');
-/*#}#*/
+Inc('../tmpl/state');
 Inc('../tmpl/view');
-/*#if(modules.service||modules.updaterAsync){#*/
-let G_Now = Date.now;
 Inc('../tmpl/service');
-/*#if(modules.servicePush){#*/
-Inc('../tmpl/svsx');
-/*#}#*/
-/*#}#*/
 Inc('../tmpl/base');
+Inc('../tmpl/magix');
 export default Magix;

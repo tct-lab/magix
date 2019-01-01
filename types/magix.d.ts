@@ -2,7 +2,34 @@
  * 本文件应存放在magix仓库中，并被install到项目的node_modules目录下。
  * 但是因magix.d.ts未在项目中检验，先在项目中使用，待稳定后再移入magix仓库中发版，避免频繁发布magix的版本
  */
-declare namespace Magix {
+declare namespace Magix5 {
+    /**
+     * 鼠标事件
+     */
+    interface MagixMouseEvent extends MouseEvent {
+        params: {
+            [key: string]: any
+        },
+        eventTarget: HTMLElement
+    }
+    /**
+     * 键盘事件
+     */
+    interface MagixKeyboardEvent extends KeyboardEvent {
+        params: {
+            [key: string]: any
+        },
+        eventTarget: HTMLElement
+    }
+    /**
+     * 混合鼠标及键盘的事件对象
+     */
+    interface MagixMixedEvent extends MouseEvent, KeyboardEvent {
+        params: {
+            [key: string]: any
+        },
+        eventTarget: HTMLElement
+    }
     /**
      * 配置信息接口
      */
@@ -27,10 +54,6 @@ declare namespace Magix {
          * 根view的id
          */
         rootId?: string
-        /**
-         * 项目启动时加载的扩展，这些扩展会在项目初始化之前加载进来
-         */
-        exts?: string[]
         /**
          * 以try catch执行一些用户重写的核心流程，当出错时，允许开发者通过该配置项进行捕获。注意：您不应该在该方法内再次抛出任何错误
          */
@@ -104,7 +127,7 @@ declare namespace Magix {
          * @param key key
          * @param defaultValue 当值不存在时候返回的默认值
          */
-        get<TDefaultValueType=any>(key: string, defaultValue?: TDefaultValueType): string
+        get<TDefaultValueType=string>(key: string, defaultValue?: TDefaultValueType): TDefaultValueType
 
     }
     /**
@@ -145,12 +168,6 @@ declare namespace Magix {
         readonly params: {
             readonly [key: string]: RouterDiffItem
         }
-    }
-    /**
-     * magix虚拟dom接口
-     */
-    interface MagixVDOM {
-        [key: string]: any
     }
     /**
      * 数据载体接口
@@ -208,7 +225,7 @@ declare namespace Magix {
          * @param name 事件名称
          * @param fn 事件处理函数
          */
-        off(name: string, fn?: Function): this
+        off(name: string, fn?: (this: T, e?: TriggerEventDescriptor) => void): this
 
         /**
          * 派发事件
@@ -222,7 +239,7 @@ declare namespace Magix {
     /**
      * 状态接口
      */
-    interface State extends Event<State> {
+    interface State extends Event<Router> {
         /**
          * 从状态对象中获取数据
          * @param key 数据key，如果未传递则返回整个状态对象
@@ -234,21 +251,6 @@ declare namespace Magix {
          * @param unchanged 指示哪些数据并没有变化的对象
          */
         set(data: object, unchanged?: { [key: string]: any }): this
-        /**
-         * 清理Magix.State中的数据，只能在view的mixins中使用，如 mixins:[Magix.State.clean("a,b")]
-         * @param keys 逗号分割的字符串
-         */
-        clean(keys: string): void
-        /**
-         * 检测数据变化，派发changed事件，通过set放入数据后需要显式调用该方法才会派发事件
-         * @param data 数据对象，如{a:20,b:30}
-         * @param unchanged 指示哪些数据并没有变化的对象
-         */
-        digest(data?: object, unchanged?: { [key: string]: any }): void
-        /**
-         * State中的数据发生变化时触发
-         */
-        onchanged: (this: this, e?: StateChangedEvent) => void
     }
     /**
      * api注册信息接口
@@ -399,30 +401,6 @@ declare namespace Magix {
     interface ExtendStaticPropertyDescriptor {
         [key: string]: any
     }
-
-    /**
-     * 监控url参数接口
-     */
-    interface ViewObserveUrl {
-        /**
-         * 监听参数。逗号分割的字符串，或字符串数组
-         */
-        params?: string | string[]
-
-        /**
-         * 是否监听地址的改变
-         */
-        path?: boolean
-    }
-    /**
-     * view事件接口
-     */
-    interface ViewEvent extends TriggerEventDescriptor {
-        /**
-         * 节点id
-         */
-        readonly id: string
-    }
     /**
      * vframe静态事件接口
      */
@@ -430,14 +408,14 @@ declare namespace Magix {
         /**
          * vframe对象
          */
-        readonly vframe: VframePrototype
+        readonly vframe: Vframe
     }
 
 
     /**
      * 缓存类
      */
-    interface CachePrototype {
+    interface Cache {
         /**
          * 设置缓存的资源
          * @param key 缓存资源时使用的key，唯一的key对应唯一的资源
@@ -470,53 +448,56 @@ declare namespace Magix {
     /**
      * 缓存类
      */
-    interface Cache {
+    interface CacheConstructor {
         /**
          * 缓存类
          * @param max 最大缓存个数
          * @param buffer 缓存区个数，默认5
          * @param removedCallback 当缓存的资源被删除时调用
          */
-        new(max?: number, buffer?: number, removedCallback?: (this: void, resource: any) => void): CachePrototype
-        readonly prototype: CachePrototype
+        new(max?: number, buffer?: number, removedCallback?: (this: void, resource: any) => void): Cache
+        readonly prototype: Cache
     }
 
 
     /**
      * 拥有事件on,off,fire的基类原型
      */
-    interface BasePrototype extends Event<BasePrototype> {
+    interface Base extends Event<Base> {
 
     }
     /**
      * 拥有事件on,off,fire的基类
      */
-    interface Base {
+    interface BaseConstructor {
         /**
          * 初始化
          */
-        new(...args: any[]): BasePrototype
+        new(...args: any[]): Base
         /**
          * 继承Magix.Base
          * @param props 原型方法或属性的对象
          * @param statics 静态方法或属性的对象
          */
-        extend<TProps=object, TStatics =object>(props?: TExtendPropertyDescriptor<TProps & BasePrototype>, statics?: TStatics): this & TStatics
+        extend<TProps=object, TStatics =object>(props?: TExtendPropertyDescriptor<TProps & Base>, statics?: TStatics): this & TStatics
         /**
          * 原型
          */
-        readonly prototype: BasePrototype
+        readonly prototype: Base
     }
 
     /**
      * Vframe类原型
      */
-    interface VframePrototype extends Event<VframePrototype> {
+    interface Vframe extends Event<Vframe> {
         /**
-         * vframe所在的节点id
+         * 当前vframe的唯一id
          */
         readonly id: string
-
+        /**
+         * vframe所在的节点
+         */
+        readonly root: HTMLElement
         /**
          * 渲染的view模块路径，如app/views/default
          */
@@ -539,30 +520,31 @@ declare namespace Magix {
 
         /**
          * 在某个dom节点上渲染vframe
-         * @param id 要渲染的节点id
+         * @param node 要渲染的节点
          * @param viewPath view路径
          * @param viewInitParams 初始化view时传递的参数，可以在view的init方法中接收
          */
-        mountVframe(id: string, viewPath: string, viewInitParams?: object): this
+        mountVframe(node: HTMLElement, viewPath: string, viewInitParams?: object): this
 
         /**
          * 销毁dom节点上渲染的vframe
-         * @param id 节点id，默认当前view
+         * @param node 节点对象或vframe id，默认当前view
+         * @param isVframeId 指示node是否为vframe id
          */
-        unmountVframe(id?: string): void
+        unmountVframe(node?: HTMLElement | string, isVframeId?: boolean): void
 
         /**
          * 渲染某个节点下的所有子view
-         * @param id 节点id，默认当前view
+         * @param node 节点对象，默认当前view
          * @param viewInitParams 初始化view时传递的参数，可以在view的init方法中接收
          */
-        mountZone(id?: string, viewInitParams?: object): void
+        mountZone(node?: HTMLElement, viewInitParams?: object): void
 
         /**
          * 销毁某个节点下的所有子view
-         * @param id 节点id，默认当前view
+         * @param node 节点对象，默认当前view
          */
-        unmountZone(id?: string): void
+        unmountZone(node?: HTMLElement): void
 
         /**
          * 获取祖先vframe
@@ -581,31 +563,27 @@ declare namespace Magix {
          * @param args 传递的参数
          */
         invoke<TReturnType>(name: string, args?: any[]): TReturnType
-        /**
-         * 子孙view创建完成时触发
-         */
-        oncreated: (this: this, e?: TriggerEventDescriptor) => void
-
-        /**
-         * 子孙view修改时触发
-         */
-        onalter: (this: this, e?: TriggerEventDescriptor) => void
     }
     /**
      * Vframe类，开发者绝对不需要继承、实例化该类！
      */
-    interface Vframe extends Event<Vframe> {
+    interface VframeConstructor extends Event<Vframe> {
         /**
          * 获取当前页面上所有的vframe
          */
         all(): {
-            [key: string]: VframePrototype
+            [key: string]: Vframe
         }
         /**
          * 根据id获取vframe
-         * @param id id
+         * @param id
          */
-        get(id: string): VframePrototype
+        byId(id: string): Vframe
+        /**
+         * 根据节点获取vframe
+         * @param node 节点对象
+         */
+        byNode(node: HTMLElement): Vframe
 
         /**
          * 当vframe创建并添加到管理对象上时触发
@@ -619,34 +597,28 @@ declare namespace Magix {
         /**
          * 原型
          */
-        readonly prototype: VframePrototype
-    }
-    interface IncrementDiff {
-        node: HTMLElement,
-        deep: boolean
-        data: boolean
-        html: boolean
-        keys: object
+        readonly prototype: Vframe
     }
     /**
      * view类原型
      */
-    interface ViewPrototype extends Event<ViewPrototype> {
+    interface View extends Event<View> {
         /**
-         * 当前view所在的节点id
+         * 当前view的唯一id
          */
         readonly id: string
         /**
+         * 当前view所在的节点对象
+         */
+        readonly root: HTMLElement
+        /**
          * 模板
          */
-        readonly tmpl: string | {
-            html: string
-            subs: object[]
-        }
+        readonly tmpl: Function
         /**
          * 持有当前view的vframe
          */
-        readonly owner: VframePrototype
+        readonly owner: Vframe
         /**
          * 更新界面对象
          */
@@ -669,7 +641,7 @@ declare namespace Magix {
          * @param id 设置html的节点id
          * @param html 待设置的html
          */
-        assign(data: object, options?: IncrementDiff): boolean
+        assign(data: object): boolean
 
         /**
          * 监听地址栏的改变，如"/app/path?page=1&size=20"，其中"/app/path"为path,"page,size"为参数
@@ -684,20 +656,15 @@ declare namespace Magix {
          */
         observeLocation(observeObject: ViewObserveLocation): void
         /**
-         * 监听Magix.State中的数据变化
-         * @param keys 逗号分割的字符串
+         * 通知当前view某个节点即将开始进行html的更新
+         * @param node 哪块区域需要更新，默认当前view
          */
-        observeState(keys: string): void
+        beginUpdate(node?: HTMLElement): void
         /**
-         * 通知当前view某个节点即将开始进行html的更新，在该方法内部会派发prerender事件
-         * @param id 哪块区域需要更新，默认当前view
+         * 通知当前view某个节点结束html的更新
+         * @param node 哪块区域需要更新，默认当前view
          */
-        beginUpdate(id?: string): void
-        /**
-         * 通知当前view某个节点结束html的更新，在该方法内部会派发rendered事件
-         * @param id 哪块区域需要更新，默认当前view
-         */
-        endUpdate(id?: string): void
+        endUpdate(node?: HTMLElement): void
         /**
          * 包装异步回调
          * 为什么要包装？
@@ -706,7 +673,7 @@ declare namespace Magix {
          * @param callback 回调方法
          * @param context 回调方法执行时的this指向
          */
-        wrapAsync<TThisType>(callback: (this: TThisType, ...args: any[]) => void, context?: TThisType): Function
+        wrapAsync<TThisType>(callback: (this: TThisType, ...args: any[]) => void, context?: TThisType): (...args: any[]) => void
         /**
          * 把资源交给当前view托管，当view销毁或重新渲染时自动对托管的资源做处理，即在合适的时候调用资源的destroy方法。返回托管的资源
          * @param key 托管资源的key，当要托管的key已经存在时且要托管的资源与之前的不相同时，会自动销毁之前托管的资源
@@ -726,7 +693,7 @@ declare namespace Magix {
          * @param resolve 确定离开时调用该方法，通知magix离开
          * @param reject 留在当前界面时调用的方法，通知magix不要离开
          */
-        leaveConfirm(msg: string, resolve: Function, reject: Function): void
+        leaveConfirm(msg: string, resolve: () => void, reject: () => void): void
         /**
          * 离开提醒，比如表单有变化且未保存，我们可以提示用户是直接离开，还是保存后再离开
          * @param msg 离开提示消息
@@ -751,7 +718,7 @@ declare namespace Magix {
          * @param unchanged 指示哪些数据并没有变化的对象
          * @param resolve 完成更新后的回调
          */
-        digest(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, resolve?: Function): void
+        digest(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, resolve?: () => void): void
 
         /**
          * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化
@@ -762,10 +729,6 @@ declare namespace Magix {
          * 检测数据是否有变动
          */
         altered(): boolean
-        /**
-         * 检测放入的数据有没有引起变化
-         */
-        changed(): boolean
         /**
          * 得到模板中@符号对应的原始数据
          * @param data 数据对象
@@ -789,48 +752,47 @@ declare namespace Magix {
     /**
      * View类
      */
-    interface View {
+    interface ViewConstructor {
         /**
          * 继承Magix.View
          * @param props 包含可选的init和render方法的对象
          * @param statics 静态方法或属性的对象
          */
-        extend<TProps=object, TStatics =object>(props?: TExtendPropertyDescriptor<TProps & ViewPrototype>, statics?: TStatics): this & TStatics
+        extend<TProps=object, TStatics =object>(props?: TExtendPropertyDescriptor<TProps & View>, statics?: TStatics): this & TStatics
         /**
          * 扩展到Magix.View原型上的对象
          * @param props 包含可选的ctor方法的对象
          */
-        merge(...args: TExtendPropertyDescriptor<ViewPrototype>[]): void
+        merge(...args: TExtendPropertyDescriptor<View>[]): void
         /**
          * 原型
          */
-        readonly prototype: ViewPrototype
+        readonly prototype: View
     }
-
     /**
      * 接口管理类原型
      */
-    interface ServicePrototype {
+    interface Service {
         /**
          * 所有请求完成回调done
          * @param metas 接口名称或对象数组
          * @param done 全部接口成功时回调
          */
-        all(metas: object[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
+        all(metas: ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
 
         /**
          * 所有请求完成回调done，与all不同的是：如果接口指定了缓存，all会走缓存，而save则不会
          * @param metas 接口名称或对象数组
          * @param done 全部接口成功时回调
          */
-        save(metas: object[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
+        save(metas: ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
 
         /**
          * 任意一个成功均立即回调，回调会被调用多次
          * @param metas 接口名称或对象数组
          * @param done 全部接口成功时回调
          */
-        one(metas: object[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
+        one(metas: ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
         /**
          * 排队，前一个all,one或save任务做完后的下一个任务，类似promise
          * @param callback 当前面的任务完成后调用该回调
@@ -848,7 +810,7 @@ declare namespace Magix {
     /**
      * 接口管理类
      */
-    interface Service extends Event<Service> {
+    interface ServiceConstructor extends Event<ServiceConstructor> {
         /**
          * 继承产生新的Service类
          * @param sync 同步数据的方法，通常在该方法内与服务端交换数据
@@ -905,218 +867,209 @@ declare namespace Magix {
         /**
          * 初始化
          */
-        new(): ServicePrototype
+        new(): Service
         /**
          * 原型
          */
-        readonly prototype: ServicePrototype
+        readonly prototype: Service
+    }
+    interface Magix {
+        /**
+            * 设置或获取配置信息
+            * @param cfg 配置信息参数对象
+            */
+        config<T extends object>(cfg: Config & T): Config & T
+
+        /**
+         * 获取配置信息
+         * @param key 配置key
+         */
+        config(key: string): any
+
+        /**
+         * 获取配置信息对象
+         */
+        config<T extends object>(): Config & T
+
+        /**
+         * 应用初始化入口
+         * @param cfg 配置信息参数对象
+         */
+        boot(cfg: Config): void
+        /**
+         * 把列表转化成hash对象。Magix.toMap([1,2,3,5,6]) => {1:1,2:1,3:1,4:1,5:1,6:1}。Magix.toMap([{id:20},{id:30},{id:40}],'id') => {20:{id:20},30:{id:30},40:{id:40}}
+         * @param list 源数组
+         * @param key 以数组中对象的哪个key的value做为hash的key
+         */
+        toMap<T extends object>(list: any[], key?: string): T
+        /**
+         * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
+         * @param fns 函数数组
+         * @param args 参数数组
+         * @param context 在待执行的方法内部，this的指向
+         */
+        toTry<TReturnType, TContextType>(fns: ((this: TContextType, ...args: any[]) => void) | ((this: TContextType, ...args: any[]) => void)[], args?: any[], context?: TContextType): TReturnType
+
+        /**
+         * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
+         * @param fns 函数数组
+         * @param args 参数数组
+         * @param context 在待执行的方法内部，this的指向
+         */
+        toTry<TReturnType>(fns: Function | Function[], args?: any[], context?: any): TReturnType
+
+        /**
+         * 转换成字符串路径。Magix.toUrl('/xxx/',{a:'b',c:'d'}) => /xxx/?a=b&c=d
+         * @param path 路径
+         * @param params 参数对象
+         * @param keo 保留空白值的对象
+         */
+        toUrl(path: string, params?: object, keo?: object): string
+        /**
+         * 把路径字符串转换成对象。Magix.parseUrl('/xxx/?a=b&c=d') => {path:'/xxx/',params:{a:'b',c:'d'}}
+         * @param url 路径字符串
+         */
+        parseUrl(url: string): RouterParseParts
+
+
+        /**
+         * 把source对象的值添加到target对象上
+         * @param target 要mix的目标对象
+         * @param source mix的来源对象
+         */
+        mix<T, U>(target: T, source: U): T & U;
+
+        /**
+         * 把source对象的值添加到target对象上
+         * @param target 要mix的目标对象
+         * @param source1 第一个mix的来源对象
+         * @param source2 第二个mix的来源对象
+         */
+        mix<T, U, V>(target: T, source1: U, source2: V): T & U & V;
+
+        /**
+         * 把source对象的值添加到target对象上
+         * @param target 要mix的目标对象
+         * @param source1 第一个mix的来源对象
+         * @param source2 第二个mix的来源对象
+         * @param source3 第三个mix的来源对象
+         */
+        mix<T, U, V, W>(target: T, source1: U, source2: V, source3: W): T & U & V & W;
+
+        /**
+         * 把source对象的值添加到target对象上
+         * @param target 要mix的目标对象
+         * @param sources 一个或多个mix的来源对象
+         */
+        mix(target: object, ...sources: any[]): any;
+
+
+        /**
+         * 检测某个对象是否拥有某个属性。
+         * @param owner 检测对象
+         * @param prop 属性
+         */
+        has(owner: object, prop: string | number): boolean
+
+        /**
+         * 获取对象的keys
+         * @param src 源对象
+         */
+        keys(src: object): string[]
+
+        /**
+         * 判断一个节点是否在另外一个节点内，如果比较的2个节点是同一个节点，也返回true
+         * @param node 节点或节点id
+         * @param container 容器节点或节点id
+         */
+        inside(node: HTMLElement, container: HTMLElement): boolean
+
+        /**
+         * document.getElementById的简写
+         * @param id 节点id
+         */
+        node(id: string): HTMLElement | null
+
+        /**
+         * 使用加载器的加载模块功能
+         * @param deps 模块id
+         * @param callback 回调
+         */
+        use(deps: string[], callback: (...args: object[]) => any): void
+
+        /**
+         * 保护对象不被修改
+         * @param o 保护对象
+         */
+        guard<T extends object>(o: T): T
+
+        /**
+         * 触发事件
+         * @param node dom节点
+         * @param type 事件类型
+         * @param data 数据
+         */
+        dispatch(node: HTMLElement, type: string, data?: any): void
+        /**
+         * 获取对象类型
+         * @param aim 目标对象
+         */
+        type(aim: any): string
+        /**
+         * 向页面追加样式
+         * @param key 样式对应的唯一key，该key主要防止向页面反复添加同样的样式
+         * @param cssText 样式字符串
+         */
+        applyStyle(key: string, cssText: string): void
+        /**
+         * 向页面追加样式
+         * @param atFile 以@开头的文件路径
+         */
+        applyStyle(atFile: string): void
+        /**
+         * 生成唯一的guid
+         * @param prefix guid的前缀，默认mx-
+         */
+        guid(prefix?: string): string
+        /**
+         * 接管管理类
+         */
+        Service: ServiceConstructor
+
+        /**
+         * view类
+         */
+        View: ViewConstructor
+        /**
+         * 缓存类
+         */
+        Cache: CacheConstructor
+        /**
+         * 状态对象
+         */
+        State: State
+        /**
+         * 事件对象
+         */
+        Event: Event
+        /**
+         * 路由对象
+         */
+        Router: Router
+        /**
+         * Vframe类，开发者绝对不需要继承、实例化该类！
+         */
+        Vframe: VframeConstructor
+
+        /**
+         * 拥有事件on,off,fire的基类
+         */
+        Base: BaseConstructor
+        default: this
     }
 }
 
-declare interface Magix {
-    /**
-     * 设置或获取配置信息
-     * @param cfg 配置信息参数对象
-     */
-    config<T extends object>(cfg: Magix.Config & T): Magix.Config & T
-
-    /**
-     * 获取配置信息
-     * @param key 配置key
-     */
-    config(key: string): any
-
-    /**
-     * 获取配置信息对象
-     */
-    config<T extends object>(): Magix.Config & T
-
-    /**
-     * 应用初始化入口
-     * @param cfg 配置信息参数对象
-     */
-    boot(cfg: Magix.Config): void
-    /**
-     * 把列表转化成hash对象。Magix.toMap([1,2,3,5,6]) => {1:1,2:1,3:1,4:1,5:1,6:1}。Magix.toMap([{id:20},{id:30},{id:40}],'id') => {20:{id:20},30:{id:30},40:{id:40}}
-     * @param list 源数组
-     * @param key 以数组中对象的哪个key的value做为hash的key
-     */
-    toMap<T extends object>(list: any[], key?: string): T
-    /**
-     * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
-     * @param fns 函数数组
-     * @param args 参数数组
-     * @param context 在待执行的方法内部，this的指向
-     */
-    toTry<TReturnType, TContextType>(fns: ((this: TContextType, ...args: any[]) => void) | ((this: TContextType, ...args: any[]) => void)[], args?: any[], context?: TContextType): TReturnType
-
-    /**
-     * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
-     * @param fns 函数数组
-     * @param args 参数数组
-     * @param context 在待执行的方法内部，this的指向
-     */
-    toTry<TReturnType>(fns: Function | Function[], args?: any[], context?: any): TReturnType
-
-    /**
-     * 转换成字符串路径。Magix.toUrl('/xxx/',{a:'b',c:'d'}) => /xxx/?a=b&c=d
-     * @param path 路径
-     * @param params 参数对象
-     * @param keo 保留空白值的对象
-     */
-    toUrl(path: string, params?: object, keo?: object): string
-    /**
-     * 把路径字符串转换成对象。Magix.parseUrl('/xxx/?a=b&c=d') => {path:'/xxx/',params:{a:'b',c:'d'}}
-     * @param url 路径字符串
-     */
-    parseUrl(url: string): Magix.RouterParseParts
-
-
-    /**
-     * 把source对象的值添加到target对象上
-     * @param target 要mix的目标对象
-     * @param source mix的来源对象
-     */
-    mix<T, U>(target: T, source: U): T & U;
-
-    /**
-     * 把source对象的值添加到target对象上
-     * @param target 要mix的目标对象
-     * @param source1 第一个mix的来源对象
-     * @param source2 第二个mix的来源对象
-     */
-    mix<T, U, V>(target: T, source1: U, source2: V): T & U & V;
-
-    /**
-     * 把source对象的值添加到target对象上
-     * @param target 要mix的目标对象
-     * @param source1 第一个mix的来源对象
-     * @param source2 第二个mix的来源对象
-     * @param source3 第三个mix的来源对象
-     */
-    mix<T, U, V, W>(target: T, source1: U, source2: V, source3: W): T & U & V & W;
-
-    /**
-     * 把source对象的值添加到target对象上
-     * @param target 要mix的目标对象
-     * @param sources 一个或多个mix的来源对象
-     */
-    mix(target: object, ...sources: any[]): any;
-
-
-    /**
-     * 检测某个对象是否拥有某个属性。
-     * @param owner 检测对象
-     * @param prop 属性
-     */
-    has(owner: object, prop: string | number): boolean
-
-    /**
-     * 获取对象的keys
-     * @param src 源对象
-     */
-    keys(src: object): string[]
-
-    /**
-     * 判断一个节点是否在另外一个节点内，如果比较的2个节点是同一个节点，也返回true
-     * @param node 节点或节点id
-     * @param container 容器节点或节点id
-     */
-    inside(node: HTMLElement | string, container: HTMLElement | string): boolean
-
-    /**
-     * document.getElementById的简写
-     * @param id 节点id
-     */
-    node(id: string | HTMLElement): HTMLElement | null
-
-    /**
-     * 给节点添加id
-     * @param node 节点对象
-     */
-    nodeId(node: HTMLElement): string
-
-    /**
-     * 使用加载器的加载模块功能
-     * @param deps 模块id
-     * @param callback 回调
-     */
-    use(deps: string[], callback: (...args: object[]) => any): void
-
-    /**
-     * 保护对象不被修改
-     * @param o 保护对象
-     */
-    guard<T extends object>(o: T): T
-
-    /**
-     * 触发事件
-     * @param node dom节点
-     * @param type 事件类型
-     * @param data 数据
-     */
-    fire(node: HTMLElement, type: string, data: any): void
-
-    /**
-     * 获取对象类型
-     * @param aim 目标对象
-     */
-    type(aim: any): string
-    /**
-     * 向页面追加样式
-     * @param key 样式对应的唯一key，该key主要防止向页面反复添加同样的样式
-     * @param cssText 样式字符串
-     */
-    applyStyle(key: string, cssText: string): void
-    /**
-     * 向页面追加样式
-     * @param atFile 以@开头的文件路径
-     */
-    applyStyle(atFile: string): void
-    /**
-     * 生成唯一的guid
-     * @param prefix guid的前缀，默认mx-
-     */
-    guid(prefix?: string): string
-    /**
-     * 接管管理类
-     */
-    Service: Magix.Service
-
-    /**
-     * view类
-     */
-    View: Magix.View
-    /**
-     * 缓存类
-     */
-    Cache: Magix.Cache
-    /**
-     * 状态对象
-     */
-    State: Magix.State
-    /**
-     * 事件对象
-     */
-    Event: Magix.Event
-    /**
-     * 路由对象
-     */
-    Router: Magix.Router
-    /**
-     * Vframe类，开发者绝对不需要继承、实例化该类！
-     */
-    Vframe: Magix.Vframe
-
-    /**
-     * 拥有事件on,off,fire的基类
-     */
-    Base: Magix.Base
-    default: Magix
-}
-
-declare const Magix: Magix
-
-declare module "magix" {
+declare module "magix5" {
+    const Magix: Magix5.Magix;
     export = Magix
 }

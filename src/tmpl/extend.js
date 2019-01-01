@@ -1,11 +1,11 @@
 function T() { }
-let G_Extend = (ctor, base, props, statics, cProto) => {
+let Extend = (ctor, base, props, statics, cProto) => {
     //bProto.constructor = base;
-    T[G_PROTOTYPE] = base[G_PROTOTYPE];
+    T[Prototype] = base[Prototype];
     cProto = new T();
-    G_Assign(cProto, props);
-    G_Assign(ctor, statics);
+    Assign(cProto, props);
+    Assign(ctor, statics);
     cProto.constructor = ctor;
-    ctor[G_PROTOTYPE] = cProto;
+    ctor[Prototype] = cProto;
     return ctor;
 };

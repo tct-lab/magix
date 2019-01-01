@@ -49,10 +49,10 @@
  */
 
 function Bag() {
-    this.id = GUID('b');
-    this['@{~bag#attrs}'] = {};
+    this.id = G_Id('b');
+    this.$ = {};
 }
-Assign(Bag[Prototype], {
+G_Assign(Bag[G_PROTOTYPE], {
     /**
      * @lends Bag#
      */
@@ -91,25 +91,25 @@ Assign(Bag[Prototype], {
 
             或者key本身就是数组
          */
-        let attrs = me['@{~bag#attrs}'];
+        let attrs = me.$;
         if (key) {
-            let tks = IsArray(key) ? key.slice() : (key + Empty).split('.'),
+            let tks = G_IsArray(key) ? key.slice() : (key + G_EMPTY).split('.'),
                 tk;
             while ((tk = tks.shift()) && attrs) {
                 attrs = attrs[tk];
             }
             if (tk) {
-                attrs = Undefined;
+                attrs = G_Undefined;
             }
         }
         let type;
-        if (dValue !== Undefined && (type = Type(dValue)) != Type(attrs)) {
+        if (dValue !== G_Undefined && (type = G_Type(dValue)) != G_Type(attrs)) {
             if (DEBUG) {
                 console.warn('type neq:' + key + ' is not a(n) ' + type);
             }
             attrs = dValue;
         }
-        if (DEBUG && me['@{~bag#meta.info}'] && me['@{~bag#meta.info}']['@{~meta#cache.key}']) { //缓存中的接口不让修改数据
+        if (DEBUG && me['@{service#meta.info}'] && me['@{service#meta.info}'].k) { //缓存中的接口不让修改数据
             attrs = Safeguard(attrs);
         }
         return attrs;
@@ -120,68 +120,65 @@ Assign(Bag[Prototype], {
      * @param {Object} [val] 属性值
      */
     set(key, val) {
-        if (!IsObject(key)) {
+        if (!G_IsObject(key)) {
             key = { [key]: val };
         }
-        Assign(this['@{~bag#attrs}'], key);
+        G_Assign(this.$, key);
     }
 });
 let Service_FetchFlags_ONE = 1;
 let Service_FetchFlags_ALL = 2;
-let Service_Cache_Done = (bagCacheKeys, cacheKey, fns) => error => {
-    fns = bagCacheKeys[cacheKey];
+function Service_CacheDone(cacheKey, err, fns) {
+    fns = this[cacheKey]; //取出当前的缓存信息
     if (fns) {
-        delete bagCacheKeys[cacheKey]; //先删除掉信息
-        ToTry(fns, error, fns['@{~service-cache-list#entity}']); //执行所有的回调
+        delete this[cacheKey]; //先删除掉信息
+        G_ToTry(fns, err, fns.e); //执行所有的回调
     }
-};
-// function Service_CacheDone(cacheKey, err, fns) {
-//     fns = this[cacheKey]; //取出当前的缓存信息
-//     if (fns) {
-//         delete this[cacheKey]; //先删除掉信息
-//         ToTry(fns, err, fns['@{~service-cache-list#entity}']); //执行所有的回调
-//     }
-// }
+}
 let Service_Task = (done, host, service, total, flag, bagCache) => {
     let doneArr = [];
-    let errorArgs = Null;
+    let errorArgs = G_NULL;
     let currentDoneCount = 0;
 
     return function (idx, error) {
         currentDoneCount++; //当前完成加1.
-        let newBag;
         let bag = this;
-        let mm = bag['@{~bag#meta.info}'];
-        let cacheKey = mm['@{~meta#cache.key}'], temp;
+        let newBag;
+        let mm = bag['@{service#meta.info}'];
+        let cacheKey = mm.k, temp;
         doneArr[idx + 1] = bag; //完成的bag
         if (error) { //出错
             errorArgs = error;
             //errorArgs[idx] = err; //记录相应下标的错误信息
-            //Assign(errorArgs, err);
+            //G_Assign(errorArgs, err);
             newBag = 1; //标记当前是一个新完成的bag,尽管出错了
         } else if (!bagCache.has(cacheKey)) { //如果缓存对象中不存在，则处理。注意在开始请求时，缓存与非缓存的都会调用当前函数，所以需要在该函数内部做判断处理
             if (cacheKey) { //需要缓存
                 bagCache.set(cacheKey, bag); //缓存
             }
             //bag.set(data);
-            mm['@{~meta#cache.time}'] = Date_Now(); //记录当前完成的时间
-            temp = mm['@{~meta#after}'];
+            mm.t = G_Now(); //记录当前完成的时间
+            temp = mm.a;
             if (temp) { //有after
-                ToTry(temp, bag, bag);
+                G_ToTry(temp, bag, bag);
+            }
+            temp = mm.x;
+            if (temp) { //需要清理
+                host.clear(temp);
             }
             newBag = 1;
         }
-        if (!service['@{~service#destroyed}']) { //service['@{~service#destroyed}'] 当前请求被销毁
+        if (!service['@{service#destroyed}']) { //service['@{service#destroyed}'] 当前请求被销毁
             let finish = currentDoneCount == total;
             if (finish) {
-                service['@{~service#busy}'] = 0;
+                service['@{service#busy}'] = 0;
                 if (flag == Service_FetchFlags_ALL) { //all
                     doneArr[0] = errorArgs;
-                    ToTry(done, doneArr, service);
+                    G_ToTry(done, doneArr, service);
                 }
             }
             if (flag == Service_FetchFlags_ONE) { //如果是其中一个成功，则每次成功回调一次
-                ToTry(done, [error || Null, bag, finish, idx], service);
+                G_ToTry(done, [error || G_NULL, bag, finish, idx], service);
             }
         }
         if (newBag) { //不管当前request或回调是否销毁，均派发end事件，就像前面缓存一样，尽量让请求处理完成，该缓存的缓存，该派发事件派发事件。
@@ -202,42 +199,66 @@ let Service_Task = (done, host, service, total, flag, bagCache) => {
  * @return {Service}
  */
 let Service_Send = (me, attrs, done, flag, save) => {
-    if (me['@{~service#destroyed}']) return me; //如果已销毁，返回
-    if (me['@{~service#busy}']) { //繁忙，后续请求入队
+    if (me['@{service#destroyed}']) return me; //如果已销毁，返回
+    if (me['@{service#busy}']) { //繁忙，后续请求入队
         return me.enqueue(Service_Send.bind(me, me, attrs, done, flag, save));
     }
-    me['@{~service#busy}'] = 1; //标志繁忙
-    if (!IsArray(attrs)) {
+    me['@{service#busy}'] = 1; //标志繁忙
+    if (!G_IsArray(attrs)) {
         attrs = [attrs];
     }
     let host = me.constructor,
         requestCount = 0;
-    //let bagCache = host['@{~service#cache}']; //存放bag的Cache对象
-    let bagCacheKeys = host['@{~service#request.keys}']; //可缓存的bag key
-    let removeComplete = Service_Task(done, host, me, attrs.length, flag, host['@{~service#cache}']);
+    //let bagCache = host['@{service#cache}']; //存放bag的Cache对象
+    let bagCacheKeys = host['@{service#request.keys}']; //可缓存的bag key
+    let remoteComplete = Service_Task(done, host, me, attrs.length, flag, host['@{service#cache}']);
+    /*#if(modules.serviceCombine){#*/
+    let combineBags = [],
+        combineCbs = [];
+    /*#}#*/
     for (let bag of attrs) {
         if (bag) {
-            let [bagEntity, update] = host.get(bag, save); //获取bag信息
-            let cacheKey = bagEntity['@{~bag#meta.info}']['@{~meta#cache.key}']; //从实体上获取缓存key
+            let bagInfo = host.get(bag, save); //获取bag信息
 
-            let complete = removeComplete.bind(bagEntity, requestCount++);
+            let bagEntity = bagInfo.e;
+            let cacheKey = bagEntity['@{service#meta.info}'].k; //从实体上获取缓存key
+
+            let complete = remoteComplete.bind(bagEntity, requestCount++); //包装当前的完成回调
             let cacheList;
 
             if (cacheKey && bagCacheKeys[cacheKey]) { //如果需要缓存，并且请求已发出
                 bagCacheKeys[cacheKey].push(complete); //放到队列中
-            } else if (update) { //需要更新
+            } else if (bagInfo.u) { //需要更新
                 if (cacheKey) { //需要缓存
                     cacheList = [complete];
-                    cacheList['@{~service-cache-list#entity}'] = bagEntity;
+                    cacheList.e = bagEntity;
                     bagCacheKeys[cacheKey] = cacheList;
-                    complete = Service_Cache_Done(bagCacheKeys, cacheKey); //替换回调，详见Service_CacheDone
+                    complete = Service_CacheDone.bind(bagCacheKeys, cacheKey); //替换回调，详见Service_CacheDone
                 }
-                host['@{~service#send}'](bagEntity, complete);
+                /*#if(modules.serviceCombine){#*/
+                combineBags.push(bagEntity);
+                combineCbs.push(complete);
+                /*#}else{#*/
+                host['@{service#send}'](bagEntity, complete);
+                /*#}#*/
             } else { //不需要更新时，直接回调
                 complete();
             }
         }
     }
+    /*#if(modules.serviceCombine){#*/
+    if (combineBags.length) {
+        let tempBag = new Bag();
+        tempBag.set('bags', combineBags);
+        tempBag._cbs = combineCbs;
+        host['@{service#send}'](tempBag, () => {
+            let list = tempBag._cbs, f;
+            for (f of list) {
+                f();
+            }
+        });
+    }
+    /*#}#*/
     return me;
 };
 /**
@@ -276,19 +297,19 @@ let Service_Send = (me, attrs, done, flag, save) => {
  */
 function Service() {
     let me = this;
-    me.id = GUID('s');
+    me.id = G_Id('s');
     if (DEBUG) {
-        me.id = GUID('\x1es');
+        me.id = G_Id('\x1es');
         setTimeout(() => {
-            if (!me.__captured) {
+            if (!me['@{service#captured}']) {
                 console.warn('beware! You should use view.capture to connect Service and View');
             }
         }, 1000);
     }
-    me['@{~service#list}'] = [];
+    me['@{service#list}'] = [];
 }
 
-Assign(Service[Prototype], {
+G_Assign(Service[G_PROTOTYPE], {
     /**
      * @lends Service#
      */
@@ -364,9 +385,9 @@ Assign(Service[Prototype], {
      */
     enqueue(callback) {
         let me = this;
-        if (!me['@{~service#destroyed}']) {
-            me['@{~service#list}'].push(callback);
-            me.dequeue(me['@{~service#last.arguments}']);
+        if (!me['@{service#destroyed}']) {
+            me['@{service#list}'].push(callback);
+            me.dequeue(me['@{service#last.arguments}']);
         }
         return me;
     },
@@ -399,17 +420,17 @@ Assign(Service[Prototype], {
     dequeue(...a) {
         let me = this,
             one;
-        if (!me['@{~service#busy}'] && !me['@{~service#destroyed}']) {
-            me['@{~service#busy}'] = 1;
+        if (!me['@{service#busy}'] && !me['@{service#destroyed}']) {
+            me['@{service#busy}'] = 1;
             Timeout(() => { //前面的任务可能从缓存中来，执行很快
-                me['@{~service#busy}'] = 0;
-                if (!me['@{~service#destroyed}']) { //不清除setTimeout,但在回调中识别是否调用了destroy方法
-                    one = me['@{~service#list}'].shift();
+                me['@{service#busy}'] = 0;
+                if (!me['@{service#destroyed}']) { //不清除setTimeout,但在回调中识别是否调用了destroy方法
+                    one = me['@{service#list}'].shift();
                     if (one) {
-                        ToTry(one, me['@{~service#last.arguments}'] = a);
+                        G_ToTry(one, me['@{service#last.arguments}'] = a);
                     }
                 }
-            }, 0);
+            },0);
         }
     },
     /**
@@ -417,8 +438,8 @@ Assign(Service[Prototype], {
      */
     destroy(me) {
         me = this;
-        me['@{~service#destroyed}'] = 1; //只需要标记及清理即可，其它的不需要
-        me['@{~service#list}'] = 0;
+        me['@{service#destroyed}'] = 1; //只需要标记及清理即可，其它的不需要
+        me['@{service#list}'] = 0;
     }
     /**
      * 当Service发送请求前触发
@@ -461,10 +482,16 @@ Assign(Service[Prototype], {
 });
 
 let Manager_DefaultCacheKey = (meta, attrs, arr) => {
-    arr = [JSON_Stringify(attrs), JSON_Stringify(meta)];
-    return arr.join(Spliter);
+    arr = [JSONStringify(attrs), JSONStringify(meta)];
+    return arr.join(G_SPLITER);
 };
-let Service_Manager = Assign({
+let Manager_ClearCache = (v, ns, cache, mm) => {
+    mm = v && v['@{service#meta.info}'];
+    if (mm && ns[mm.n]) {
+        cache.del(mm.k);
+    }
+};
+let Service_Manager = {
     /**
      * @lends Service
      */
@@ -474,18 +501,15 @@ let Service_Manager = Assign({
      */
     add(attrs) {
         let me = this;
-        let metas = me['@{~service#metas}'],
+        let metas = me['@{service#meta.info}'],
             bag;
-        if (!IsArray(attrs)) {
+        if (!G_IsArray(attrs)) {
             attrs = [attrs];
         }
         for (bag of attrs) {
             if (bag) {
                 let { name, cache } = bag;
                 bag.cache = cache | 0;
-                if (DEBUG && Has(metas, name)) {
-                    throw new Error('service already exists:' + name);
-                }
                 metas[name] = bag;
             }
         }
@@ -501,17 +525,19 @@ let Service_Manager = Assign({
         let cache = (attrs.cache | 0) || meta.cache;
         let entity = new Bag();
         entity.set(meta);
-        entity['@{~bag#meta.info}'] = {
-            '@{~meta#after}': meta.after,
-            '@{~meta#cache.key}': cache && Manager_DefaultCacheKey(meta, attrs)
+        entity['@{service#meta.info}'] = {
+            n: meta.name,
+            a: meta.after,
+            x: meta.cleans,
+            k: cache && Manager_DefaultCacheKey(meta, attrs)
         };
 
-        if (IsObject(attrs)) {
+        if (G_IsObject(attrs)) {
             entity.set(attrs);
         }
         let before = meta.before;
         if (before) {
-            ToTry(before, entity, entity);
+            G_ToTry(before, entity, entity);
         }
         me.fire('begin', {
             bag: entity
@@ -536,7 +562,7 @@ let Service_Manager = Assign({
      */
     meta(attrs) {
         let me = this;
-        let metas = me['@{~service#metas}'];
+        let metas = me['@{service#meta.info}'];
         let name = attrs.name || attrs;
         let ma = metas[name];
         return ma || attrs;
@@ -558,7 +584,33 @@ let Service_Manager = Assign({
             e = me.create(attrs);
             u = 1;
         }
-        return [e, u];
+        return {
+            e,
+            u
+        };
+    },
+    /**
+     * 根据name清除缓存的attrs
+     * @param  {String|Array} names 字符串或数组
+     * @example
+     * let S = Magix.Service.extend({
+     *     //extend code
+     * });
+     *
+     * S.add({
+     *     name:'test',
+     *     url:'/test',
+     *     cache:1000*60
+     * });
+     *
+     * let s = new Service();
+     * s.all('test');
+     * s.all('test');//from cache
+     * S.clear('test');
+     * s.all('test');//fetch from server
+     */
+    clear(names) {
+        this['@{service#cache}'].each(Manager_ClearCache, G_ToMap((names + G_EMPTY).split(G_COMMA)));
     },
     /**
      * 从缓存中获取bag对象
@@ -579,7 +631,7 @@ let Service_Manager = Assign({
      */
     cached(attrs) {
         let me = this;
-        let bagCache = me['@{~service#cache}'];
+        let bagCache = me['@{service#cache}'];
         let entity;
         let cacheKey;
         let meta = me.meta(attrs);
@@ -590,21 +642,23 @@ let Service_Manager = Assign({
         }
 
         if (cacheKey) {
-            let requestCacheKeys = me['@{~service#request.keys}'];
+            let requestCacheKeys = me['@{service#request.keys}'];
             let info = requestCacheKeys[cacheKey];
             if (info) { //处于请求队列中的
-                entity = info['@{~service-cache-list#entity}'];
+                entity = info.e;
             } else { //缓存
                 entity = bagCache.get(cacheKey);
-                if (entity && Date_Now() - entity['@{~bag#meta.info}']['@{~meta#cache.time}'] > cache) {
+                if (entity && G_Now() - entity['@{service#meta.info}'].t > cache) {
                     bagCache.del(cacheKey);
                     entity = 0;
                 }
             }
         }
         return entity;
-    }
-}, MxEvent);
+    }/*#if(!modules.mini){#*/,
+    ...MEvent
+    /*#}#*/
+};
 /**
  * 继承
  * @lends Service
@@ -630,9 +684,10 @@ Service.extend = (sync, cacheMax, cacheBuffer) => {
     function NService() {
         Service.call(this);
     }
-    NService['@{~service#send}'] = sync;
-    NService['@{~service#cache}'] = new Cache(cacheMax, cacheBuffer);
-    NService['@{~service#request.keys}'] = {};
-    NService['@{~service#metas}'] = {};
-    return Extend(NService, Service, Null, Service_Manager);
+    NService['@{service#send}'] = sync;
+    NService['@{service#cache}'] = new G_Cache(cacheMax, cacheBuffer);
+    NService['@{service#request.keys}'] = {};
+    NService['@{service#meta.info}'] = {};
+    return G_Extend(NService, Service, G_NULL, Service_Manager);
 };
+Magix.Service = Service;

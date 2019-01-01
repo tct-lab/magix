@@ -1,9 +1,10 @@
+/*#if(!modules.mini){#*/
 /**
  * 多播事件对象
  * @name Event
  * @namespace
  */
-let MxEvent = {
+let MEvent = {
     /**
      * @lends MEvent
      */
@@ -12,29 +13,34 @@ let MxEvent = {
      * @param {String} name 事件名称
      * @param {Object} data 事件对象
      * @param {Boolean} [remove] 事件触发完成后是否移除这个事件的所有监听
+     * @param {Boolean} [lastToFirst] 是否从后向前触发事件的监听列表
      */
-    fire(name, data) {
-        let key = Spliter + name,
+    fire(name, data, remove, lastToFirst) {
+        let key = G_SPLITER + name,
             me = this,
             list = me[key],
-            idx = 0, len, t;
+            end, len, idx, t;
         if (!data) data = {};
         data.type = name;
         if (list) {
-            for (len = list.length; idx < len; idx++) {
+            end = list.length;
+            len = end - 1;
+            while (end--) {
+                idx = lastToFirst ? end : len - end;
                 t = list[idx];
                 if (t.f) {
                     t.x = 1;
-                    ToTry(t.f, data, me);
-                    t.x = Empty;
+                    G_ToTry(t.f, data, me);
+                    t.x = G_EMPTY;
                 } else if (!t.x) {
-                    list.splice(idx--, 1);
+                    list.splice(idx, 1);
                     len--;
                 }
             }
         }
         list = me[`on${name}`];
-        if (list) ToTry(list, data, me);
+        if (list) G_ToTry(list, data, me);
+        if (remove) me.off(name);
         return me;
     },
     /**
@@ -56,7 +62,7 @@ let MxEvent = {
      */
     on(name, f) {
         let me = this;
-        let key = Spliter + name;
+        let key = G_SPLITER + name;
         let list = me[key] || (me[key] = []);
         list.push({
             f
@@ -69,7 +75,7 @@ let MxEvent = {
      * @param {Function} [fn] 事件处理函数
      */
     off(name, fn) {
-        let key = Spliter + name,
+        let key = G_SPLITER + name,
             me = this,
             list = me[key],
             t;
@@ -77,7 +83,7 @@ let MxEvent = {
             if (list) {
                 for (t of list) {
                     if (t.f == fn) {
-                        t.f = Empty;
+                        t.f = G_EMPTY;
                         break;
                     }
                 }
@@ -89,3 +95,5 @@ let MxEvent = {
         return me;
     }
 };
+Magix.Event = MEvent;
+/*#}#*/

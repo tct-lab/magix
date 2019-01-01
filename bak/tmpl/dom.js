@@ -311,6 +311,11 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys) => {
                     uri = newMxView && G_ParseUri(newMxView),
                     params,
                     htmlChanged, paramsChanged, assign;
+
+                if (updateAttribute) {
+                    //对于view，我们只更新特别的几个属性
+                    I_SetAttributes(oldNode, newNode, ref, oldVf && newMxView);
+                }
                 if (newMxView && oldVf &&
                     (!G_GetAttribute(newNode, 'id') || G_GetAttribute(newNode, 'id') == oldNodeId) &&
                     oldVf['@{vframe#view.path}'] == uri[G_PATH] &&
@@ -379,10 +384,6 @@ let I_SetNode = (oldNode, newNode, oldParent, ref, vf, keys) => {
                 if (unmountOld) {
                     ref.c = 1;
                     oldVf.unmountVframe(0, 1);
-                }
-                if (updateAttribute) {
-                    //对于view，我们只更新特别的几个属性
-                    I_SetAttributes(oldNode, newNode, ref, oldVf && newMxView);
                 }
                 // Update all children (and subchildren).
                 if (updateChildren) {
