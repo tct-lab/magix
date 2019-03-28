@@ -23,12 +23,11 @@ let View_IsObserveChanged = view => {
  * @param {Vframe} vframe vframe对象
  * @private
  */
-let Dispatcher_Update = (vframe, view, isChanged, cs, c) => {
+let Dispatcher_Update = (vframe, view, cs, c) => {
     if (vframe && vframe['@{~vframe#update.tag}'] != Dispatcher_UpdateTag &&
         (view = vframe['@{~vframe#view.entity}']) &&
         view['@{~view#sign}'] > 1) {
-        isChanged = View_IsObserveChanged(view);
-        if (isChanged) { //检测view所关注的相应的参数是否发生了变化
+        if (View_IsObserveChanged(view)) { //检测view所关注的相应的参数是否发生了变化
             view['@{~view#render.short}']();
         }
         cs = vframe.children();

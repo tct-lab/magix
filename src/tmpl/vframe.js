@@ -16,6 +16,9 @@ let Vframe_Root = (rootId, e) => {
         rootId = Mx_Cfg.rootId;
         e = GetById(rootId);
         if (!e) {
+            if (DEBUG) {
+                console.error('can not find element:"' + rootId + '",use document.body as default');
+            }
             e = Doc_Body;
         }
         Vframe_RootVframe = new Vframe(e);
@@ -195,7 +198,6 @@ Assign(Vframe[Prototype], {
                 v['@{~view#sign}'] = 0;
                 v.fire('destroy');
                 v.off('destroy');
-                View_DestroyAllResources(v, 1);
                 View_DelegateEvents(v, 1);
                 v.owner = v.root = Null;
             }

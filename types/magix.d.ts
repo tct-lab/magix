@@ -212,20 +212,20 @@ declare namespace Magix5 {
     /**
      * 事件对象接口
      */
-    interface Event<T=any> {
+    interface Event<T=any, E=any> {
         /**
          * 绑定事件
          * @param name 事件名称
          * @param fn 事件处理函数
          */
-        on(name: string, fn: (this: T, e?: TriggerEventDescriptor) => void): this
+        on(name: string, fn: (this: T, e?: TriggerEventDescriptor & E) => void): this
 
         /**
          * 解除事件绑定
          * @param name 事件名称
          * @param fn 事件处理函数
          */
-        off(name: string, fn?: (this: T, e?: TriggerEventDescriptor) => void): this
+        off(name: string, fn?: (this: T, e?: TriggerEventDescriptor & E) => void): this
 
         /**
          * 派发事件
@@ -314,12 +314,6 @@ declare namespace Magix5 {
         prevent: () => void
     }
     /**
-     * 路由变化后事件接口
-     */
-    interface RouterChangedEvent extends RouterDiff, TriggerEventDescriptor {
-
-    }
-    /**
      * view监听location接口
      */
     interface ViewObserveLocation {
@@ -369,7 +363,7 @@ declare namespace Magix5 {
         /**
          * url改变后发生
          */
-        onchanged: (this: this, e?: RouterChangedEvent) => void
+        onchanged: (this: this, e?: RouterDiff & TriggerEventDescriptor) => void
     }
     /**
      * 接口服务事件接口
@@ -567,7 +561,12 @@ declare namespace Magix5 {
     /**
      * Vframe类，开发者绝对不需要继承、实例化该类！
      */
-    interface VframeConstructor extends Event<Vframe> {
+    interface VframeConstructor extends Event<Vframe, {
+        /**
+         * vframe对象
+         */
+        vframe: Vframe
+    }> {
         /**
          * 获取当前页面上所有的vframe
          */
@@ -675,25 +674,12 @@ declare namespace Magix5 {
          */
         wrapAsync<TThisType>(callback: (this: TThisType, ...args: any[]) => void, context?: TThisType): (...args: any[]) => void
         /**
-         * 把资源交给当前view托管，当view销毁或重新渲染时自动对托管的资源做处理，即在合适的时候调用资源的destroy方法。返回托管的资源
-         * @param key 托管资源的key，当要托管的key已经存在时且要托管的资源与之前的不相同时，会自动销毁之前托管的资源
-         * @param resource 托管的资源
-         * @param destroyWhenCallRender 当render方法再次调用时，是否自动销毁该资源，通常Magix.Service实例需要在render时自动销毁
-         */
-        capture<TResourceAndReturnType extends { destroy: () => void }>(key: string, resource?: TResourceAndReturnType, destroyWhenCallRender?: boolean): TResourceAndReturnType
-        /**
-         * 释放管理的资源。返回托管的资源，无论是否销毁
-         * @param key 托管资源的key
-         * @param destroy 是否销毁资源，即自动调用资源的destroy方法
-         */
-        release<TResourceType extends { destroy: () => void }>(key: string, destroy?: boolean): TResourceType
-        /**
          * 离开确认方法，需要开发者实现离开的界面和逻辑
          * @param msg 调用leaveTip时传递的离开消息
          * @param resolve 确定离开时调用该方法，通知magix离开
          * @param reject 留在当前界面时调用的方法，通知magix不要离开
          */
-        leaveConfirm(msg: string, resolve: () => void, reject: () => void): void
+        leaveConfirm(resolve: () => void, reject: () => void, msg: string): void
         /**
          * 离开提醒，比如表单有变化且未保存，我们可以提示用户是直接离开，还是保存后再离开
          * @param msg 离开提示消息
@@ -763,7 +749,7 @@ declare namespace Magix5 {
          * 扩展到Magix.View原型上的对象
          * @param props 包含可选的ctor方法的对象
          */
-        merge(...args: TExtendPropertyDescriptor<View>[]): void
+        merge(...args: TExtendPropertyDescriptor<View>[]): this
         /**
          * 原型
          */
@@ -810,7 +796,7 @@ declare namespace Magix5 {
     /**
      * 接口管理类
      */
-    interface ServiceConstructor extends Event<ServiceConstructor> {
+    interface ServiceConstructor extends Event<ServiceConstructor, ServiceEvent> {
         /**
          * 继承产生新的Service类
          * @param sync 同步数据的方法，通常在该方法内与服务端交换数据

@@ -56,8 +56,6 @@
     "@{~v#node.self.close}": "j",
     "@{~viewmixin#list}": "a",
     "@{~viewmixin#is.mixin}": "b",
-    "@{~resources#remove.when.render}": "a",
-    "@{~resources#entity}": "b",
     "@{~xevent#element}": "a",
     "@{~xevent#name}": "b",
     "@{~xevent#callback}": "c",

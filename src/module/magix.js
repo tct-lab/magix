@@ -54,7 +54,9 @@ Inc('../tmpl/quick');
 Inc('../tmpl/vdom');
 Inc('../tmpl/state');
 Inc('../tmpl/view');
+/*#if(modules.service){#*/
 Inc('../tmpl/service');
+/*#}#*/
 Inc('../tmpl/base');
 Inc('../tmpl/magix');
 export default Magix;

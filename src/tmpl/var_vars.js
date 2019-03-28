@@ -43,20 +43,7 @@ let Mx_Cfg = {
     }
 };
 let IsPrimitive = args => !args || typeof args != 'object';
-let UpdateData = (newData, oldData, keys, unchanged) => {
-    let changed = 0,
-        now, old, p;
-    for (p in newData) {
-        now = newData[p];
-        old = oldData[p];
-        if ((!IsPrimitive(now) || old !== now) && !Has(unchanged, p)) {
-            keys[p] = 1;
-            changed = 1;
-        }
-        oldData[p] = now;
-    }
-    return changed;
-};
+
 let NodeIn = (a, b, r) => {
     if (a && b) {
         r = a == b;

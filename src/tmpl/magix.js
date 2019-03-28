@@ -298,7 +298,9 @@ let Magix = {
     View,
     State,
     Vframe,
+    /*#if(modules.service){#*/
     Service,
+    /*#}#*/
     Event: MxEvent,
     /*#if(modules.router){#*/
     Router,

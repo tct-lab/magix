@@ -13,30 +13,6 @@ let processMixinsSameEvent = (exist, additional, temp) => {
     temp['@{~viewmixin#list}'] = temp['@{~viewmixin#list}'].concat(additional['@{~viewmixin#list}'] || additional);
     return temp;
 };
-let View_DestroyAllResources = (me, lastly) => {
-    let cache = me['@{~view#resource}'], //reources
-        p, c;
-    for (p in cache) {
-        c = cache[p];
-        if (lastly || c['@{~resources#remove.when.render}']) { //destroy
-            View_DestroyResource(cache, p, 1);
-        }
-    }
-};
-let View_DestroyResource = (cache, key, callDestroy, old) => {
-    let o = cache[key],
-        fn, res;
-    if (o && o != old) {
-        //let processed=false;
-        res = o['@{~resources#entity}']; //entity
-        fn = res.destroy;
-        if (fn && callDestroy) {
-            ToTry(fn, Empty_Array, res);
-        }
-        delete cache[key];
-    }
-    return res;
-};
 let View_WrapMethod = (prop, fName, short, fn, me) => {
     fn = prop[fName];
     prop[fName] = prop[short] = function (...args) {
@@ -44,7 +20,6 @@ let View_WrapMethod = (prop, fName, short, fn, me) => {
         if (me['@{~view#sign}'] > 0) { //signature
             me['@{~view#sign}']++;
             me.fire('rendercall');
-            View_DestroyAllResources(me);
             ToTry(fn, args, me);
         }
     };
@@ -412,60 +387,6 @@ Assign(View[Prototype], MxEvent, {
             }
         };
     },
-    /**
-     * 让view帮你管理资源，强烈建议对组件等进行托管
-     * @param {String} key 资源标识key
-     * @param {Object} res 要托管的资源
-     * @param {Boolean} [destroyWhenCalleRender] 调用render方法时是否销毁托管的资源
-     * @return {Object} 返回托管的资源
-     * @beta
-     * @module resource
-     * @example
-     * View.extend({
-     *     render: function(){
-     *         let me = this;
-     *         let dropdown = new Dropdown();
-     *
-     *         me.capture('dropdown',dropdown,true);
-     *     },
-     *     getTest: function(){
-     *         let dd = me.capture('dropdown');
-     *         console.log(dd);
-     *     }
-     * });
-     */
-    capture(key, res, destroyWhenCallRender, cache) {
-        cache = this['@{~view#resource}'];
-        if (res) {
-            View_DestroyResource(cache, key, 1, res);
-            cache[key] = {
-                '@{~resources#entity}': res,
-                '@{~resources#remove.when.render}': destroyWhenCallRender
-            };
-            //service托管检查
-            if (DEBUG && res && (res.id + Empty).indexOf('\x1es') === 0) {
-                res.__captured = 1;
-                if (!destroyWhenCallRender) {
-                    console.warn('beware! May be you should set destroyWhenCallRender = true');
-                }
-            }
-        } else {
-            cache = cache[key];
-            res = cache && cache['@{~resources#entity}'];
-        }
-        return res;
-    },
-    /**
-     * 释放管理的资源
-     * @param  {String} key 托管时的key
-     * @param  {Boolean} [destroy] 是否销毁资源
-     * @return {Object} 返回托管的资源，无论是否销毁
-     * @beta
-     * @module resource
-     */
-    release(key, destroy) {
-        return View_DestroyResource(this['@{~view#resource}'], key, destroy);
-    },
     /*#if(modules.router){#*/
     /**
      * 离开提示
@@ -630,9 +551,22 @@ Assign(View[Prototype], MxEvent, {
      *     console.log(this.get('a'));
      * }
      */
-    set(obj, unchanged) {
-        let me = this;
-        me['@{~view#updater.data.changed}'] = UpdateData(obj, me['@{~view#updater.data}'], me['@{~view#updater.keys}'], unchanged) || me['@{~view#updater.data.changed}'];
+    set(newData, unchanged) {
+        let me = this,
+            oldData = me['@{~view#updater.data}'],
+            keys = me['@{~view#updater.keys}'];
+        let changed = me['@{~view#updater.data.changed}'],
+            now, old, p;
+        for (p in newData) {
+            now = newData[p];
+            old = oldData[p];
+            if ((!IsPrimitive(now) || old !== now) && !Has(unchanged, p)) {
+                keys[p] = 1;
+                changed = 1;
+            }
+            oldData[p] = now;
+        }
+        me['@{~view#updater.data.changed}'] = changed;
         return me;
     },
     /**

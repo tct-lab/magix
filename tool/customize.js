@@ -7,7 +7,8 @@ let sep = path.sep;
 let modulesReg = /\/\/#modules\s*=\s*([^\r\n]+)/;
 let incReg = /Inc\((['"])(.+)\1\);*/g;
 let modules = {
-    router: 1
+    router: 1,
+    service: 1
 };
 let copyFile = (from, to, callback) => {
     let folders = path.dirname(to).split(sep);

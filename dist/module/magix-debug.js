@@ -1,10 +1,10 @@
 //#snippet;
 //#exclude = all;
-/*!5.0.0 Licensed MIT*/
+/*!5.0.1 Licensed MIT*/
 /*
 author:kooboy_li@163.com
 loader:module
-enables:
+enables:service
 
 optionals:router
 */
@@ -53,20 +53,7 @@ let Mx_Cfg = {
     }
 };
 let IsPrimitive = args => !args || typeof args != 'object';
-let UpdateData = (newData, oldData, keys, unchanged) => {
-    let changed = 0,
-        now, old, p;
-    for (p in newData) {
-        now = newData[p];
-        old = oldData[p];
-        if ((!IsPrimitive(now) || old !== now) && !Has(unchanged, p)) {
-            keys[p] = 1;
-            changed = 1;
-        }
-        oldData[p] = now;
-    }
-    return changed;
-};
+
 let NodeIn = (a, b, r) => {
     if (a && b) {
         r = a == b;
@@ -600,6 +587,9 @@ let Vframe_Root = (rootId, e) => {
         rootId = Mx_Cfg.rootId;
         e = GetById(rootId);
         if (!e) {
+            if (DEBUG) {
+                console.error('can not find element:"' + rootId + '",use document.body as default');
+            }
             e = Doc_Body;
         }
         Vframe_RootVframe = new Vframe(e);
@@ -777,7 +767,6 @@ Assign(Vframe[Prototype], {
                 v['d'] = 0;
                 v.fire('destroy');
                 v.off('destroy');
-                View_DestroyAllResources(v, 1);
                 View_DelegateEvents(v, 1);
                 v.owner = v.root = Null;
             }
@@ -1159,7 +1148,7 @@ let Body_DOMEventProcessor = domEvent => {
                         }
                     }
                 } else {//如果处于删除中的事件触发，则停止事件的传播
-                    domEvent.stopPropagation();
+                    break;
                 }
                 if (DEBUG) {
                     if (!view && view !== 0) { //销毁
@@ -1242,8 +1231,8 @@ let Updater_Ref = ($$, v, k) => {
 let Updater_Digest = (view, digesting) => {
     let keys = view['j'],
         changed = view['k'],
-        vf = view.owner,
         viewId = view.id,
+        vf = Vframe_Vframes[viewId],
         ref = { 'a': [] },
         tmpl, vdom, data = view['e'],
         refData = view['a'],
@@ -1563,6 +1552,27 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
     } else {
         ref['b'] = 1;
         SetInnerHTML(realNode, newVDOM['c']);
+        if (DEBUG) {
+            if (!vframe.root.parentNode) {
+                throw new Error(`unsupport nest "${vframe.path}". the root element is removed by other views`);
+            }
+            let pId = vframe.pId;
+            let vf = Vframe_Vframes[pId];
+            if (vf) {
+                let cs = vf.children();
+                for (let c of cs) {
+                    if (c != vframe.id) {
+                        let nv = Vframe_Vframes[c];
+                        if (nv &&
+                            nv['a'] &&
+                            nv['a'].tmpl &&
+                            NodeIn(vframe.root, nv.root)) {
+                            throw new Error(`unsupport nest "${vframe.path}" within "${nv.path}"`);
+                        }
+                    }
+                }
+            }
+        }
     }
 };
 let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
@@ -1727,30 +1737,6 @@ let processMixinsSameEvent = (exist, additional, temp) => {
     temp['a'] = temp['a'].concat(additional['a'] || additional);
     return temp;
 };
-let View_DestroyAllResources = (me, lastly) => {
-    let cache = me['c'], //reources
-        p, c;
-    for (p in cache) {
-        c = cache[p];
-        if (lastly || c['a']) { //destroy
-            View_DestroyResource(cache, p, 1);
-        }
-    }
-};
-let View_DestroyResource = (cache, key, callDestroy, old) => {
-    let o = cache[key],
-        fn, res;
-    if (o && o != old) {
-        //let processed=false;
-        res = o['b']; //entity
-        fn = res.destroy;
-        if (fn && callDestroy) {
-            ToTry(fn, Empty_Array, res);
-        }
-        delete cache[key];
-    }
-    return res;
-};
 let View_WrapMethod = (prop, fName, short, fn, me) => {
     fn = prop[fName];
     prop[fName] = prop[short] = function (...args) {
@@ -1758,7 +1744,6 @@ let View_WrapMethod = (prop, fName, short, fn, me) => {
         if (me['d'] > 0) { //signature
             me['d']++;
             me.fire('rendercall');
-            View_DestroyAllResources(me);
             ToTry(fn, args, me);
         }
     };
@@ -2122,60 +2107,6 @@ Assign(View[Prototype], MxEvent, {
             }
         };
     },
-    /**
-     * 让view帮你管理资源，强烈建议对组件等进行托管
-     * @param {String} key 资源标识key
-     * @param {Object} res 要托管的资源
-     * @param {Boolean} [destroyWhenCalleRender] 调用render方法时是否销毁托管的资源
-     * @return {Object} 返回托管的资源
-     * @beta
-     * @module resource
-     * @example
-     * View.extend({
-     *     render: function(){
-     *         let me = this;
-     *         let dropdown = new Dropdown();
-     *
-     *         me.capture('dropdown',dropdown,true);
-     *     },
-     *     getTest: function(){
-     *         let dd = me.capture('dropdown');
-     *         console.log(dd);
-     *     }
-     * });
-     */
-    capture(key, res, destroyWhenCallRender, cache) {
-        cache = this['c'];
-        if (res) {
-            View_DestroyResource(cache, key, 1, res);
-            cache[key] = {
-                'b': res,
-                'a': destroyWhenCallRender
-            };
-            //service托管检查
-            if (DEBUG && res && (res.id + Empty).indexOf('\x1es') === 0) {
-                res.__captured = 1;
-                if (!destroyWhenCallRender) {
-                    console.warn('beware! May be you should set destroyWhenCallRender = true');
-                }
-            }
-        } else {
-            cache = cache[key];
-            res = cache && cache['b'];
-        }
-        return res;
-    },
-    /**
-     * 释放管理的资源
-     * @param  {String} key 托管时的key
-     * @param  {Boolean} [destroy] 是否销毁资源
-     * @return {Object} 返回托管的资源，无论是否销毁
-     * @beta
-     * @module resource
-     */
-    release(key, destroy) {
-        return View_DestroyResource(this['c'], key, destroy);
-    },
     
     /**
      * 设置view的html内容
@@ -2245,9 +2176,22 @@ Assign(View[Prototype], MxEvent, {
      *     console.log(this.get('a'));
      * }
      */
-    set(obj, unchanged) {
-        let me = this;
-        me['k'] = UpdateData(obj, me['e'], me['j'], unchanged) || me['k'];
+    set(newData, unchanged) {
+        let me = this,
+            oldData = me['e'],
+            keys = me['j'];
+        let changed = me['k'],
+            now, old, p;
+        for (p in newData) {
+            now = newData[p];
+            old = oldData[p];
+            if ((!IsPrimitive(now) || old !== now) && !Has(unchanged, p)) {
+                keys[p] = 1;
+                changed = 1;
+            }
+            oldData[p] = now;
+        }
+        me['k'] = changed;
         return me;
     },
     /**
@@ -2357,6 +2301,7 @@ Assign(View[Prototype], MxEvent, {
         return ParseExpr(origin, this['a']);
     }
 });
+
 /*
     一个请求send后，应该取消吗？
     参见xmlhttprequest的实现
@@ -2995,6 +2940,7 @@ Service.extend = (sync, cacheMax, cacheBuffer) => {
     NService['h'] = {};
     return Extend(NService, Service, Null, Service_Manager);
 };
+
 Assign(Noop[Prototype], MxEvent);
 Noop.extend = function extend(props, statics) {
     let me = this;
@@ -3301,7 +3247,9 @@ let Magix = {
     View,
     State,
     Vframe,
+    
     Service,
+    
     Event: MxEvent,
     
     guard: Safeguard,

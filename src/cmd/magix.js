@@ -43,7 +43,9 @@ define('/*#=modules.moduleId#*/', () => {
     Inc('../tmpl/vdom');
     Inc('../tmpl/state');
     Inc('../tmpl/view');
+    /*#if(modules.service){#*/
     Inc('../tmpl/service');
+    /*#}#*/
     Inc('../tmpl/base');
     Inc('../tmpl/magix');
     Magix.default = Magix;

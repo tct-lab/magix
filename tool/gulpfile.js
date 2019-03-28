@@ -7,7 +7,7 @@ let pkg = require('../package.json');
 let customize = require('./customize');
 
 let type = 'cmd,module'; //打包kissy则type='kissy'
-let enableModules = '';
+let enableModules = 'service';
 
 gulp.task('combine', () => {
     type.split(',').forEach(t => {

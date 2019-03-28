@@ -176,6 +176,27 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
     } else {
         ref['@{~updater-ref#changed}'] = 1;
         SetInnerHTML(realNode, newVDOM['@{~v#node.html}']);
+        if (DEBUG) {
+            if (!vframe.root.parentNode) {
+                throw new Error(`unsupport mount "${vframe.path}". the root element is removed by other views`);
+            }
+            let pId = vframe.pId;
+            let vf = Vframe_Vframes[pId];
+            if (vf) {
+                let cs = vf.children();
+                for (let c of cs) {
+                    if (c != vframe.id) {
+                        let nv = Vframe_Vframes[c];
+                        if (nv &&
+                            nv['@{~vframe#view.entity}'] &&
+                            nv['@{~vframe#view.entity}'].tmpl &&
+                            NodeIn(vframe.root, nv.root)) {
+                            throw new Error(`unsupport nest "${vframe.path}" within "${nv.path}"`);
+                        }
+                    }
+                }
+            }
+        }
     }
 };
 let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {

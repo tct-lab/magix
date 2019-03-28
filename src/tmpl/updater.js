@@ -53,8 +53,8 @@ let Updater_Ref = ($$, v, k) => {
 let Updater_Digest = (view, digesting) => {
     let keys = view['@{~view#updater.keys}'],
         changed = view['@{~view#updater.data.changed}'],
-        vf = view.owner,
         viewId = view.id,
+        vf = Vframe_Vframes[viewId],
         ref = { '@{~updater-ref#view.renders}': [] },
         tmpl, vdom, data = view['@{~view#updater.data}'],
         refData = view['@{~view#updater.ref.data}'],
