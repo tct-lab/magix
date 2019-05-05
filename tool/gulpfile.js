@@ -1,21 +1,29 @@
 let gulp = require('gulp');
-let terser = require('gulp-terser-scoped');
 let fs = require('fs');
-let rename = require('gulp-rename');
-let header = require('gulp-header');
-let pkg = require('../package.json');
 let customize = require('./customize');
 
-let type = 'cmd,module'; //打包kissy则type='kissy'
-let enableModules = 'service';
+let type = 'cmd,module';
+let enableModules = 'mixins,router,routerHash,rich,richView';
 
 gulp.task('combine', () => {
     type.split(',').forEach(t => {
+        if (t == 'cmd') {
+            customize({
+                moduleId: 'magix5',
+                loaderType: t,
+                toJS: true,
+                tmplFile: '../src/' + t + '/magix.ts',
+                aimFile: '../dist/' + t + '/magix.js',
+                enableModules: enableModules
+            });
+        }
         customize({
             moduleId: 'magix5',
             loaderType: t,
-            tmplFile: '../src/' + t + '/magix.js',
-            aimFile: '../dist/' + t + '/magix-debug.js',
+            tmplFile: '../src/' + t + '/magix.ts',
+            aimFile: '../dist/' + t + '/magix.ts',
+            tmplTSFile: '../src/' + t + '/magix.d.ts',
+            aimTSFile: '../dist/' + t + '/magix.d.ts',
             enableModules: enableModules
         }, map => {
             let m = {};
@@ -26,30 +34,5 @@ gulp.task('combine', () => {
             }
             fs.writeFileSync('./revisement.json', JSON.stringify(m, null, 4));
         });
-    });
-});
-
-gulp.task('compress', () => {
-    type.split(',').forEach(t => {
-        gulp.src('../dist/' + t + '/magix-debug.js')
-            .pipe(terser({
-                esModule: t == 'module',
-                compress: {
-                    expression: true,
-                    keep_fargs: false,
-                    drop_console: true,
-                    global_defs: {
-                        DEBUG: false
-                    }
-                },
-                output: {
-                    ascii_only: true
-                }
-            }))
-            .pipe(header('/*!<%=ver%> MIT kooboy_li@163.com*/', {
-                ver: pkg.version
-            }))
-            .pipe(rename('magix.js'))
-            .pipe(gulp.dest('../dist/' + t + '/'));
     });
 });
