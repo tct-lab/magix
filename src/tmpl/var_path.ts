@@ -1,4 +1,4 @@
-
+let Decode = decodeURIComponent;
 let PathToObject = new MxCache();
 let ParseUri = path => {
     //把形如 /xxx/?a=b&c=d 转换成对象 {path:'/xxx/',params:{a:'b',c:'d'}}
@@ -19,7 +19,7 @@ let ParseUri = path => {
             if (path) {
                 for (q of path.split('&')) {
                     [key, value] = q.split('=');
-                    po[key] = decodeURIComponent(value || Empty);
+                    po[Decode(key)] = Decode(value || Empty);
                 }
             }
         }
@@ -43,7 +43,7 @@ let ToUri = (path, params, keo) => {
         }
     }
     if (f) {
-        path += (path && (~path.indexOf('?') ? '&' : '?')) + arr.join('&');
+        path += (path && (path.includes('?') ? '&' : '?')) + arr.join('&');
     }
     return path;
 };
@@ -63,13 +63,17 @@ let ParseExpr = (expr, data, result?) => {
     } else {
         //jshint evil:true
         result = ToTry(Function(`return ${expr}`));
-        if (expr.indexOf(Spliter) > -1) {
+        if (expr.includes(Spliter)) {
             TranslateData(data, result);
+            if (DEBUG) {
+                result = Safeguard(result, true);
+            }
+        } else {
+            if (DEBUG) {
+                result = Safeguard(result, true);
+            }
+            ParseExprCache.set(expr, result);
         }
-        if (DEBUG) {
-            result = Safeguard(result, true);
-        }
-        ParseExprCache.set(expr, result);
     }
     return result;
 };

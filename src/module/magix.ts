@@ -4,43 +4,49 @@ Inc('../tmpl/var_cache');
 Inc('../tmpl/var_dom');
 Inc('../tmpl/var_path');
 Inc('../tmpl/call');
-let MxDefaultViewEntity;
 let M_Ext = '.js';
+let ImportPromises = {};
 let Async_Require = (name, fn) => {
     if (name) {
-        if (MxGlobalView == name) {
-            if (!MxDefaultViewEntity) {
-                MxDefaultViewEntity = View.extend();
-            }
-            fn(MxDefaultViewEntity);
-        } else {
-            if (!IsArray(name)) name = [name];
-            let a = [], b = [], paths = Mx_Cfg.paths, f, s, p;
-            for (f of name) {
-                s = f.indexOf('/');
-                if (s > -1 && !f.startsWith('.')) {
-                    p = f.slice(0, s);
-                    f = f.slice(s + 1);
-                    if (DEBUG) {
-                        f = (paths[p] || `unset/${p}/path/`) + f;
-                    } else {
-                        f = paths[p] + f;
-                    }
+        if (!IsArray(name)) name = [name];
+        let a = [], b = [], f, s, p;
+        let paths = Mx_Cfg.paths;
+        /*#if(modules.require){#*/
+        let require = Mx_Cfg.require;
+        /*#}#*/
+        for (f of name) {
+            s = f.indexOf('/');
+            if (s > -1 && !f.startsWith('.')) {
+                p = f.slice(0, s);
+                f = f.slice(s + 1);
+                if (DEBUG) {
+                    f = (paths[p] || `unset/${p}/path/`) + f;
+                } else {
+                    f = paths[p] + f;
                 }
-                if (!f.endsWith(M_Ext)) {
-                    f += M_Ext;
-                }
-                a.push(import(f));
             }
+            if (!f.endsWith(M_Ext)) {
+                f += M_Ext;
+            }
+            if (!ImportPromises[f]) {
+                ImportPromises[f] = import(f);
+            }
+            a.push(ImportPromises[f]);
+        }
+        /*#if(modules.require){#*/
+        require(name).then(() => {
+            /*#}#*/
             Promise.all(a).then(args => {
                 for (f of args) {
                     b.push(f.default);
                 }
                 CallFunction(fn, b);
             });
-        }
+            /*#if(modules.require){#*/
+        });
+        /*#}#*/
     } else {
-        fn();
+        CallFunction(fn);
     }
 };
 Inc('../tmpl/extend');

@@ -1,6 +1,4 @@
-/*#if(modules.router){#*/
 let Magix_Booted = 0;
-/*#}#*/
 let Magix = {
     config(cfg, r) {
         r = Mx_Cfg;
@@ -14,33 +12,50 @@ let Magix = {
         return r;
     },
     boot(cfg) {
-        Assign(Mx_Cfg, cfg); //先放到配置信息中，供ini文件中使用
-        /*#if(modules.router){#*/
-        /*#if(modules.mxevent){#*/
-        Router.on(Changed, Dispatcher_NotifyChange);
-        /*#}#*/
-        Magix_Booted = 1;
-        Router_Bind();
-        /*#}else{#*/
-        Vframe_Root().mountView(Mx_Cfg.defaultView);
-        /*#}#*/
-        if (DEBUG) {
-            let whiteList = {
-                defaultView: 1,
-                error: 1,
-                defaultPath: 1,
-                recast: 1,
-                rewrite: 1,
-                rootId: 1,
-                routes: 1,
-                unmatchView: 1,
-                title: 1
-            };
-            Mx_Cfg = Safeguard(Mx_Cfg, true, (key, value) => {
-                if (Has(whiteList, key)) {
-                    throw new Error(`avoid write ${key} to magix config!`);
-                }
-            });
+        if (!Magix_Booted) {
+            Magix_Booted = 1;
+            Assign(Mx_Cfg, cfg); //先放到配置信息中，供ini文件中使用
+            /*#if(modules.router){#*/
+            Router_Init_PNR();
+            /*#if(modules.mxevent){#*/
+            Router.on(Changed, Dispatcher_NotifyChange);
+            /*#}#*/
+            Router_Bind();
+            /*#}else{#*/
+            Vframe_Root().mountView(Mx_Cfg.defaultView);
+            /*#}#*/
+            if (DEBUG) {
+                let whiteList = {
+                    defaultView: 1,
+                    error: 1,
+                    defaultPath: 1,
+                    recast: 1,
+                    rewrite: 1,
+                    require: 1,
+                    paths: 1,
+                    rootId: 1,
+                    routes: 1,
+                    unmatchView: 1,
+                    title: 1
+                };
+                Mx_Cfg = Safeguard(Mx_Cfg, true, (key, value) => {
+                    if (Has(whiteList, key)) {
+                        throw new Error(`avoid write ${key} to magix config!`);
+                    }
+                });
+            }
+        }
+    },
+    unboot() {
+        if (Magix_Booted) {
+            /*#if(modules.router){#*/
+            Magix_Booted = 0;
+            /*#if(modules.mxevent){#*/
+            Router.off(Changed, Dispatcher_NotifyChange);
+            /*#}#*/
+            Router_Unbind();
+            /*#}#*/
+            Vframe_Unroot();
         }
     },
     /*#if(modules.rich){#*/toMap: ToMap,
@@ -71,6 +86,8 @@ let Magix = {
     /*#if(modules.router){#*/
     Router,
     /*#}#*/
+    mark: Mark,
+    unmark: Unmark,
     node: GetById,
-    task: CallFunction
+    task: SafeCallFunction
 };

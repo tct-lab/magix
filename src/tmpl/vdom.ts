@@ -1,16 +1,3 @@
-let V_SPECIAL_PROPS = {
-    input: {
-        [Value]: 1,
-        checked: 1
-    },
-    [Q_TEXTAREA]: {
-        [Value]: 1
-    },
-    option: {
-        selected: 1
-    }
-};
-
 let V_SKIP_PROPS = {
     [Tag_Static_Key]: 1,
     [Tag_View_Params_Key]: 1
@@ -42,39 +29,38 @@ let V_NSMap = {
     math: `${V_W3C}1998/Math/MathML`
 };
 /*#}#*/
-let V_SetAttributes = (oldNode, lastVDOM, newVDOM, common) => {
+let V_SetAttributes = (oldNode, lastVDOM, newVDOM) => {
     let key, value,
         changed = 0,
-        specials = V_SPECIAL_PROPS[lastVDOM['@{~v#node.tag}']],
+        nsMap = newVDOM['@{~v#node.attrs.specials}'],
+        osMap = lastVDOM['@{~v#node.attrs.specials}'],
         nMap = newVDOM['@{~v#node.attrs.map}'],
-        oMap = lastVDOM['@{~v#node.attrs.map}'];
-    if (common) {
-        if (lastVDOM) {
-            for (key in oMap) {
-                if (!Has(specials, key) &&
-                    !Has(nMap, key)) {//如果旧有新木有
-                    changed = 1;
+        oMap = lastVDOM['@{~v#node.attrs.map}'],
+        sValue;
+    if (lastVDOM) {
+        for (key in oMap) {
+            if (!Has(nMap, key)) {//如果旧有新木有
+                changed = 1;
+                if ((sValue = osMap[key])) {
+                    oldNode[sValue] = Empty;
+                } else {
                     oldNode.removeAttribute(key);
                 }
             }
         }
-        for (key in nMap) {
-            if (!Has(specials, key) &&
-                !Has(V_SKIP_PROPS, key)) {
-                value = nMap[key];
-                //旧值与新值不相等
-                if (!lastVDOM || oMap[key] !== value) {
-                    changed = 1;
-                    oldNode.setAttribute(key, value);
-                }
-            }
-        }
     }
-    for (key in specials) {
-        value = Has(nMap, key) ? key != Value || nMap[key] : key == Value && Empty;
-        if (oldNode[key] != value) {
-            changed = 1;
-            oldNode[key] = value;
+    for (key in nMap) {
+        if (!Has(V_SKIP_PROPS, key)) {
+            value = nMap[key];
+            if ((sValue = nsMap[key])) {
+                if (!lastVDOM || oldNode[sValue] != value) {
+                    changed = 1;
+                    oldNode[sValue] = value;
+                }
+            } else if (!lastVDOM || oMap[key] != value) {
+                changed = 1;
+                oldNode.setAttribute(key, value);
+            }
         }
     }
     if (changed) {
@@ -83,20 +69,18 @@ let V_SetAttributes = (oldNode, lastVDOM, newVDOM, common) => {
     return changed;
 };
 
-let V_CreateNode = (vnode, owner, ref) => {
+let V_CreateNode = (vnode, owner) => {
     let tag = vnode['@{~v#node.tag}'], c;
     if (tag == V_TEXT_NODE) {
         c = Doc_Document.createTextNode(vnode['@{~v#node.outer.html}']);
     } else {
         c = Doc_Document.createElementNS(/*#if(modules.xml){#*/V_NSMap[tag] ||/*#}#*/ owner.namespaceURI, tag);
-        if (V_SetAttributes(c, 0, vnode, 1)) {
-            ref['@{~updater-ref#changed}'] = 1;
-        }
+        V_SetAttributes(c, 0, vnode);
         SetInnerHTML(c, vnode['@{~v#node.html}']);
     }
     return c;
 };
-let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
+let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys/*#if(modules.async){#*/, view, ready/*#}#*/) => {
     if (lastVDOM) {//view首次初始化，通过innerHTML快速更新
         if (lastVDOM['@{~v#node.has.mxv}'] ||
             lastVDOM['@{~v#node.html}'] != newVDOM['@{~v#node.html}']) {
@@ -142,22 +126,31 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
                     if (reused[oc['@{~v#node.compare.key}']]) {
                         reused[oc['@{~v#node.compare.key}']]--;
                     }
+                    /*#if(modules.async){#*/
+                    ref['@{~updater-ref#async.count}']++;
+                    CallFunction(V_SetNode, [compareKey, realNode, oc, nc, ref, vframe, keys, view, ready]);
+                    /*#}else{#*/
                     V_SetNode(compareKey, realNode, oc, nc, ref, vframe, keys);
+                    /*#}#*/
                 } else if (oc) {//有旧节点，则更新
                     if (keyedNodes[oc['@{~v#node.compare.key}']] &&
                         reused[oc['@{~v#node.compare.key}']]) {
                         oldCount++;
                         ref['@{~updater-ref#changed}'] = 1;
-                        realNode.insertBefore(V_CreateNode(nc, realNode, ref), nodes[i]);
+                        realNode.insertBefore(V_CreateNode(nc, realNode), nodes[i]);
                         oldVIndex--;
-                    } else {
+                    } else {/*#if(modules.async){#*/
+                        ref['@{~updater-ref#async.count}']++;
+                        CallFunction(V_SetNode, [nodes[i], realNode, oc, nc, ref, vframe, keys, view, ready]);
+                        /*#}else{#*/
                         V_SetNode(nodes[i], realNode, oc, nc, ref, vframe, keys);
+                        /*#}#*/
                     }
                 } else {//添加新的节点
                     if (nc['@{~v#node.tag}'] == Spliter) {
                         SetInnerHTML(realNode, nc['@{~v#node.outer.html}']);
                     } else {
-                        realNode.appendChild(V_CreateNode(nc, realNode, ref));
+                        realNode.appendChild(V_CreateNode(nc, realNode));
                     }
                     ref['@{~updater-ref#changed}'] = 1;
                 }
@@ -180,7 +173,7 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
         SetInnerHTML(realNode, newVDOM['@{~v#node.html}']);
         /*#if(modules.richVframe||modules.router){#*/
         if (DEBUG) {
-            if (!vframe.root.parentNode) {
+            if (vframe.root.nodeType == 1 && !vframe.root.parentNode) {
                 throw new Error(`unsupport mount "${vframe.path}". the root element is removed by other views`);
             }
             let pId = vframe.pId;
@@ -202,90 +195,102 @@ let V_SetChildNodes = (realNode, lastVDOM, newVDOM, ref, vframe, keys) => {
         }
         /*#}#*/
     }
+    /*#if(modules.async){#*/
+    if (!ref['@{~updater-ref#async.count}'] && view['@{~view#sign}']) {
+        ready();
+    }
+    /*#}#*/
 };
-let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
-    if (DEBUG) {
-        if (lastVDOM['@{~v#node.tag}'] != Spliter &&
-            newVDOM['@{~v#node.tag}'] != Spliter) {
-            if (oldParent.nodeName == 'TEMPLATE') {
-                console.error('unsupport template tag');
-            }
-            if (
-                (realNode.nodeName == '#text' &&
-                    lastVDOM['@{~v#node.tag}'] != '#text') ||
-                (realNode.nodeName != '#text' &&
-                    realNode.nodeName.toLowerCase() != lastVDOM['@{~v#node.tag}'].toLowerCase())) {
-                console.error('Your code is not match the DOM tree generated by the browser. near:' + lastVDOM['@{~v#node.html}'] + '. Is that you lost some tags or modified the DOM tree?');
+let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys/*#if(modules.async){#*/, rootView, ready/*#}#*/) => {
+    /*#if(modules.async){#*/
+    if (rootView['@{~view#sign}']) {
+        ref['@{~updater-ref#async.count}']--;
+        /*#}#*/
+        if (DEBUG) {
+            if (lastVDOM['@{~v#node.tag}'] != Spliter &&
+                newVDOM['@{~v#node.tag}'] != Spliter) {
+                if (oldParent.nodeName == 'TEMPLATE') {
+                    console.error('unsupport template tag');
+                }
+                if (
+                    (realNode.nodeName == '#text' &&
+                        lastVDOM['@{~v#node.tag}'] != '#text') ||
+                    (realNode.nodeName != '#text' &&
+                        realNode.nodeName.toLowerCase() != lastVDOM['@{~v#node.tag}'].toLowerCase())) {
+                    console.error('Your code is not match the DOM tree generated by the browser. near:' + lastVDOM['@{~v#node.html}'] + '. Is that you lost some tags or modified the DOM tree?');
+                }
             }
         }
-    }
-    let lastAMap = lastVDOM['@{~v#node.attrs.map}'],
-        newAMap = newVDOM['@{~v#node.attrs.map}'],
-        lastNodeTag = lastVDOM['@{~v#node.tag}'];
-    if (lastVDOM['@{~v#node.has.mxv}'] ||
-        lastVDOM['@{~v#node.outer.html}'] != newVDOM['@{~v#node.outer.html}']) {
-        if (lastNodeTag == newVDOM['@{~v#node.tag}']) {
-            if (lastNodeTag == V_TEXT_NODE) {
-                ref['@{~updater-ref#changed}'] = 1;
-                realNode.nodeValue = newVDOM['@{~v#node.outer.html}'];
-            } else if (lastNodeTag == Spliter) {
+        let lastAMap = lastVDOM['@{~v#node.attrs.map}'],
+            newAMap = newVDOM['@{~v#node.attrs.map}'],
+            lastNodeTag = lastVDOM['@{~v#node.tag}'];
+        if (lastVDOM['@{~v#node.has.mxv}'] ||
+            lastVDOM['@{~v#node.outer.html}'] != newVDOM['@{~v#node.outer.html}']) {
+            if (lastNodeTag == Spliter) {
                 ref['@{~updater-ref#changed}'] = 1;
                 SetInnerHTML(oldParent, newVDOM['@{~v#node.outer.html}']);
-            } else if (!lastAMap[Tag_Static_Key] ||
-                lastAMap[Tag_Static_Key] != newAMap[Tag_Static_Key]) {
-                let newMxView = newAMap[MX_View],
-                    newHTML = newVDOM['@{~v#node.html}'],
-                    commonAttrs = lastVDOM['@{~v#node.attrs}'] != newVDOM['@{~v#node.attrs}'],
-                    updateAttribute = Has(V_SPECIAL_PROPS, lastNodeTag) || commonAttrs,
-                    updateChildren, unmountOld,
-                    oldVf = Vframe_Vframes[realNode['@{~node#vframe.id}']],
-                    assign,
-                    view,
-                    uri = newMxView && ParseUri(newMxView),
-                    params,
-                    htmlChanged,
-                    paramsChanged;
-                /*
-                    如果存在新旧view，则考虑路径一致，避免渲染的问题
-                 */
+            } else if (lastNodeTag == newVDOM['@{~v#node.tag}']) {
+                if (lastNodeTag == V_TEXT_NODE) {
+                    ref['@{~updater-ref#changed}'] = 1;
+                    realNode.nodeValue = newVDOM['@{~v#node.outer.html}'];
+                } else if (!lastAMap[Tag_Static_Key] ||
+                    lastAMap[Tag_Static_Key] != newAMap[Tag_Static_Key]) {
+                    let newMxView = newAMap[MX_View],
+                        newHTML = newVDOM['@{~v#node.html}'],
+                        commonAttrs = lastVDOM['@{~v#node.attrs}'] != newVDOM['@{~v#node.attrs}'],
+                        updateAttribute = lastVDOM['@{~v#node.attrs.specials}'] || commonAttrs,
+                        updateChildren, unmountOld,
+                        oldVf = Vframe_Vframes[realNode['@{~node#vframe.id}']],
+                        assign,
+                        view,
+                        uri = newMxView && ParseUri(newMxView),
+                        params,
+                        htmlChanged,
+                        paramsChanged;
+                    /*
+                        如果存在新旧view，则考虑路径一致，避免渲染的问题
+                     */
 
-                /*
-                    只检测是否有参数控制view而不检测数据是否变化的原因：
-                    例：view内有一input接收传递的参数，且该input也能被用户输入
-                    var d1='xl';
-                    var d2='xl';
-                    当传递第一份数据时，input显示值xl，这时候用户修改了input的值且使用第二份数据重新渲染这个view，问input该如何显示？
-                */
-                if (updateAttribute) {
-                    updateAttribute = V_SetAttributes(realNode, lastVDOM, newVDOM, commonAttrs);
+                    /*
+                        只检测是否有参数控制view而不检测数据是否变化的原因：
+                        例：view内有一input接收传递的参数，且该input也能被用户输入
+                        var d1='xl';
+                        var d2='xl';
+                        当传递第一份数据时，input显示值xl，这时候用户修改了input的值且使用第二份数据重新渲染这个view，问input该如何显示？
+                    */
                     if (updateAttribute) {
-                        ref['@{~updater-ref#changed}'] = 1;
-                    }
-                }
-                //旧节点有view,新节点有view,且是同类型的view
-                if (newMxView && oldVf &&
-                    oldVf['@{~vframe#view.path}'] == uri[Path] &&
-                    (view = oldVf['@{~vframe#view.entity}'])) {
-                    htmlChanged = newHTML != lastVDOM['@{~v#node.html}'];
-                    paramsChanged = newMxView != oldVf[Path];
-                    assign = lastAMap[Tag_View_Params_Key];
-                    if (!htmlChanged && !paramsChanged && assign) {
-                        params = assign.split(Comma);
-                        for (assign of params) {
-                            if (assign == Hash_Key || Has(keys, assign)) {
-                                paramsChanged = 1;
-                                break;
-                            }
+                        updateAttribute = V_SetAttributes(realNode, lastVDOM, newVDOM);
+                        if (updateAttribute) {
+                            ref['@{~updater-ref#changed}'] = 1;
                         }
                     }
-                    if (paramsChanged || htmlChanged || updateAttribute) {
-                        assign = view['@{~view#rendered}'] && view['@{~view#assign.fn}'];
-                        //如果有assign方法,且有参数或html变化
-                        if (assign) {
+                    //旧节点有view,新节点有view,且是同类型的view
+                    if (newMxView && oldVf &&
+                        oldVf['@{~vframe#view.path}'] == uri[Path] &&
+                        (view = oldVf['@{~vframe#view.entity}'])) {
+                        htmlChanged = newHTML != lastVDOM['@{~v#node.html}'];
+                        paramsChanged = newMxView != oldVf[Path];
+                        assign = lastAMap[Tag_View_Params_Key];
+                        if (!htmlChanged && !paramsChanged && assign) {
+                            params = assign.split(Comma);
+                            for (assign of params) {
+                                if (assign == Hash_Key || Has(keys, assign)) {
+                                    paramsChanged = 1;
+                                    break;
+                                }
+                            }
+                        }
+                        if (paramsChanged ||
+                            htmlChanged /*#if(modules.checkAttr){#*/ ||
+                            updateAttribute/*#}#*/) {
+                            assign = view['@{~view#rendered}'] && view['@{~view#assign.fn}'];
+                            //如果有assign方法,且有参数或html变化
+                            //if (assign) {
                             params = uri[Params];
                             //处理引用赋值
                             Vframe_TranslateQuery(oldVf.pId, newMxView, params);
                             oldVf[Path] = newMxView;//update ref
+                            oldVf['@{~vframe#template}'] = newHTML;
                             //如果需要更新，则进行更新的操作
                             // uri = {
                             //     //node: newVDOM,//['@{~v#node.children}'],
@@ -300,55 +305,65 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys) => {
                             //updateAttribute = 1;
                             if (DEBUG) {
                                 let result = ToTry(assign, params,/*[params, uri],*/ view);
-                                if (result === undefined) {
-                                    console.error(`${uri[Path]} "assign" method must return true or false value`);
+                                if (result !== true && result !== false) {
+                                    if (assign == View.prototype.assign) {
+                                        console.error(`override ${uri[Path]} "assign" method and make sure returned true or false value`);
+                                    } else {
+                                        console.error(`${uri[Path]} "assign" method only allow returned true or false value`);
+                                    }
                                 }
                                 if (result) {
+                                    /*#if(!modules.async){#*/
                                     view['@{~view#assign.sign}']++;
+                                    /*#}#*/
                                     ref['@{~updater-ref#view.renders}'].push(view);
                                 }
                             } else if (ToTry(assign, params,/*[params, uri],*/ view)) {
+                                /*#if(!modules.async){#*/
                                 view['@{~view#assign.sign}']++;
+                                /*#}#*/
                                 ref['@{~updater-ref#view.renders}'].push(view);
                             }
                             //默认当一个组件有assign方法时，由该方法及该view上的render方法完成当前区域内的节点更新
                             //而对于不渲染界面的控制类型的组件来讲，它本身更新后，有可能需要继续由magix更新内部的子节点，此时通过deep参数控制
                             updateChildren = !view.tmpl;//uri.deep;
-                        } else {
-                            unmountOld = 1;
-                            updateChildren = 1;
-                            if (DEBUG) {
-                                if (updateAttribute) {
-                                    console.warn(`There is no "assign" method in ${uri[Path]},so magix remount it when attrs changed`);
-                                }
-                            }
-                        }
-                    }// else {
-                    // updateAttribute = 1;
-                    //}
-                } else {
-                    updateChildren = 1;
-                    unmountOld = oldVf;
+                            // } else {
+                            //     unmountOld = 1;
+                            //     updateChildren = 1;
+                            //     if (DEBUG) {
+                            //         if (updateAttribute) {
+                            //             console.warn(`There is no "assign" method in ${uri[Path]},so magix remount it when attrs changed`);
+                            //         }
+                            //     }
+                            // }
+                        }// else {
+                        // updateAttribute = 1;
+                        //}
+                    } else {
+                        updateChildren = 1;
+                        unmountOld = oldVf;
+                    }
+                    if (unmountOld) {
+                        ref['@{~updater-ref#changed}'] = 1;
+                        oldVf.unmountVframe();
+                    }
+                    // Update all children (and subchildren).
+                    //自闭合标签不再检测子节点
+                    if (updateChildren &&
+                        !newVDOM['@{~v#node.self.close}']) {
+                        V_SetChildNodes(realNode, lastVDOM, newVDOM, ref, vframe, keys/*#if(modules.async){#*/, rootView, ready/*#}#*/);
+                    }
                 }
-                if (unmountOld) {
-                    ref['@{~updater-ref#changed}'] = 1;
-                    oldVf.unmountVframe(0, 1);
-                }
-                // Update all children (and subchildren).
-                //自闭合标签不再检测子节点
-                if (updateChildren &&
-                    !newVDOM['@{~v#node.self.close}']) {
-                    V_SetChildNodes(realNode, lastVDOM, newVDOM, ref, vframe, keys);
-                }
-            }
-        } else {
-            if (lastVDOM['@{~v#node.tag}'] == Spliter) {
-                SetInnerHTML(oldParent, newVDOM['@{~v#node.outer.html}']);
             } else {
+                ref['@{~updater-ref#changed}'] = 1;
                 vframe.unmountZone(realNode);
-                oldParent.replaceChild(V_CreateNode(newVDOM, oldParent, ref), realNode);
+                oldParent.replaceChild(V_CreateNode(newVDOM, oldParent), realNode);
             }
-            ref['@{~updater-ref#changed}'] = 1;
+        }
+        /*#if(modules.async){#*/
+        if (!ref['@{~updater-ref#async.count}']) {
+            ready();
         }
     }
+    /*#}#*/
 };

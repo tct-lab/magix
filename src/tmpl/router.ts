@@ -13,15 +13,16 @@ let Router_ChgdCache = new MxCache();
 let Router_WinLoc = location;
 let Router_LastChanged;
 let Router_Silent = 0;
-let Router_LLoc = {
+let Router_Init_Loc = {
     query: {},
-    params: {},
+    [Params]: {},
     href: Empty
 };
+let Router_LLoc = Router_Init_Loc;
 let Router_TrimHashReg = /(?:^.*\/\/[^\/]+|#.*$)/gi;
 let Router_TrimQueryReg = /^[^#]*#?/;
 function GetParam(key, defaultValue) {
-    return this[Params][key] || defaultValue !== Undefined && defaultValue || Empty;
+    return this[Params][key] || defaultValue !== Undefined ? defaultValue + Empty : Empty;
 }
 /*#if(modules.routerState){#*/
 let Router_State = 1;
@@ -31,10 +32,11 @@ let Router_PNR_Routers, Router_PNR_UnmatchView,
     Router_PNR_DefaultView, Router_PNR_DefaultPath;
 
 let Router_PNR_Rewrite;
+let Router_PNR_Rebuild = ToUri;
 /*#if(modules.recast){#*/
 let Router_PNR_Recast;
 /*#}#*/
-let Router_AttachViewAndPath = (loc, view?) => {
+let Router_Init_PNR = () => {
     if (!Router_PNR_Routers) {
         Router_PNR_Routers = Mx_Cfg.routes || {};
         Router_PNR_UnmatchView = Mx_Cfg.unmatchView;
@@ -42,10 +44,13 @@ let Router_AttachViewAndPath = (loc, view?) => {
         //支持默认配置带参数的情况
         Router_PNR_DefaultPath = ParseUri(Mx_Cfg.defaultPath || '/');
         Router_PNR_Rewrite = Mx_Cfg.rewrite;
+        Router_PNR_Rebuild = Mx_Cfg.rebuild || Router_PNR_Rebuild;
         /*#if(modules.recast){#*/
         Router_PNR_Recast = Mx_Cfg.recast;
         /*#}#*/
     }
+};
+let Router_AttachViewAndPath = (loc, view?) => {
     if (!loc[Router_VIEW]) {
         let path = loc.hash[Path]
         /*#if(modules.routerState){#*/ || (Router_State && loc.query[Path])/*#}#*/;
@@ -62,8 +67,14 @@ let Router_AttachViewAndPath = (loc, view?) => {
         loc[Router_VIEW] = view;
         if (IsObject(view)) {
             if (DEBUG) {
-                if (!view.view) {
+                if (!view[Router_VIEW]) {
                     console.error(path, ' config missing view!', view);
+                }
+                let guardProps = ['get', 'hash', 'href', 'params', 'path', 'query', 'srcHash', 'srcQuery'];
+                for (let p of guardProps) {
+                    if (Has(view, p)) {
+                        throw new Error(`can not overwrite "${p}" from object ${JSON.stringify(view)}`);
+                    }
                 }
             }
             Assign(loc, view);

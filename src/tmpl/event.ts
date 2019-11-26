@@ -48,8 +48,8 @@ let MxEvent = {
                 }
             }
         } else {
-            delete me[key];
-            delete me[`on${name}`];
+            me[key] = Null;
+            me[`on${name}`] = Null;
         }
         return me;
     }

@@ -114,10 +114,9 @@ let Service_Task = (done, host, service, total, flag, bagCache) => {
     let errorArgs = Null;
     let currentDoneCount = 0;
 
-    return function (idx, error) {
+    return (bag, idx, error) => {
         currentDoneCount++; //当前完成加1.
         let newBag;
-        let bag = this;
         let mm = bag['@{~bag#meta.info}'];
         let cacheKey = mm['@{~meta#cache.key}'], temp;
         doneArr[idx + 1] = bag; //完成的bag
@@ -180,7 +179,7 @@ let Service_Send = (me, attrs, done, flag, save?) => {
             let [bagEntity, update] = host.get(bag, save); //获取bag信息
             let cacheKey = bagEntity['@{~bag#meta.info}']['@{~meta#cache.key}']; //从实体上获取缓存key
 
-            let complete = removeComplete.bind(bagEntity, requestCount++);
+            let complete = removeComplete.bind(bagEntity, bagEntity, requestCount++);
             let cacheList;
 
             if (cacheKey && bagCacheKeys[cacheKey]) { //如果需要缓存，并且请求已发出

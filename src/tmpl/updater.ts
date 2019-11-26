@@ -16,16 +16,16 @@ if (DEBUG) {
     };
 }
 let Updater_EM = {
-    '&': 'amp',
-    '<': 'lt',
-    '>': 'gt',
-    '"': '#34',
-    '\'': '#39',
-    '\`': '#96'
+    '&': '&#38;',
+    '<': '&#60;',
+    '>': '&#62;',
+    '"': '&#34;',
+    '\'': '&#39;',
+    '\`': '&#96;'
 };
 let Updater_ER = /[&<>"'\`]/g;
-let Updater_Safeguard = v => Empty + (v == Null ? Empty : v);
-let Updater_EncodeReplacer = m => `&${Updater_EM[m]};`;
+let Updater_Safeguard = v => v == Null ? Empty : Empty + v;
+let Updater_EncodeReplacer = m => Updater_EM[m];
 let Updater_Encode = v => Updater_Safeguard(v).replace(Updater_ER, Updater_EncodeReplacer);
 
 let Updater_UM = {
@@ -43,49 +43,78 @@ let Updater_QR = /[\\'"]/g;
 let Updater_EncodeQ = v => Updater_Safeguard(v).replace(Updater_QR, '\\$&');
 
 let Updater_Ref = ($$, v, k) => {
-    if (!$$.has(v)) {
-        k = Spliter + $$.size;
-        $$.set(v, k);
-        $$.set(k, v);
+    if (DEBUG && k === undefined) {
+        console.error('check ref data!');
     }
-    return $$.get(v);
+    $$[k] = v;
+    return k;
 };
-let Updater_Digest = view => {
-    let keys = view['@{~view#updater.keys}'],
-        changed = view['@{~view#updater.data.changed}'],
-        viewId = view.id,
-        vf = Vframe_Vframes[viewId],
-        ref = { '@{~updater-ref#view.renders}': [] },
-        tmpl, vdom, data = view['@{~view#updater.data}'],
-        refData = view['@{~view#updater.ref.data}'];
-    view['@{~view#updater.data.changed}'] = 0;
-    view['@{~view#updater.keys}'] = {};
-    if (changed && view['@{~view#sign}'] > 0 && (tmpl = view.tmpl)) {
+let Updater_Digest = (view /*#if(modules.async){#*/, fire/*#}#*/, tmpl) => {
+    if (view['@{~view#sign}'] &&
+        (tmpl = view.tmpl)) {
+        let keys = view['@{~view#updater.keys}'],
+            viewId = view.id,
+            vf = Vframe_Vframes[viewId],
+            ref = {
+                '@{~updater-ref#view.renders}': []
+         /*#if(modules.async){#*/, '@{~updater-ref#async.count}': 0/*#}#*/
+            },
+            vdom, data = view['@{~view#updater.data}'],
+            refData = vf['@{~vframe#ref.data}'];
+        view['@{~view#updater.data.changed}'] = 0;
+        view['@{~view#updater.keys}'] = {};
         /*#if(modules.mxevent){#*/
-        view.fire('dompatch');
+        /*#if(modules.async){#*/
+        if (fire) {
+            /*#}#*/
+            view.fire('dompatch');
+            /*#if(modules.async){#*/
+        }
+        /*#}#*/
         /*#}#*/
         vdom = tmpl(data, Q_Create, viewId, Updater_Safeguard, Updater_EncodeURI, refData, Updater_Ref, Updater_EncodeQ, IsArray);
         if (DEBUG) {
             Updater_CheckInput(view, vdom['@{~v#node.outer.html}']);
         }
+        /*#if(!modules.async){#*/
         V_SetChildNodes(view.root, view['@{~view#updater.vdom}'], vdom, ref, vf, keys);
-        view['@{~view#updater.vdom}'] = vdom;
-        /*
-            在dom diff patch时，如果已渲染的vframe有变化，则会在vom tree上先派发created事件，同时传递inner标志，vom tree处理alter事件派发状态，未进入created事件派发状态
-
-            patch完成后，需要设置vframe hold fire created事件，因为带有assign方法的view在调用render后，vom tree处于就绪状态，此时会导致提前派发created事件，应该hold，统一在endUpdate中派发
-
-            有可能不需要endUpdate，所以hold fire要视情况而定
-        */
-        tmpl = ref['@{~updater-ref#changed}'] || !view['@{~view#rendered}'];
-        for (vdom of ref['@{~updater-ref#view.renders}']) {
-            CallFunction(vdom['@{~view#render.short}'], Empty_Array, vdom);
+        /*#}#*/
+        /*#if(modules.async){#*/
+        let ready = () => {
+            /*#}#*/
+            view['@{~view#updater.vdom}'] = vdom;
+            /*#if(modules.async){#*/
+            if (view['@{~view#async.count}'] > 1) {
+                view['@{~view#async.count}'] = 1;
+                Updater_Digest(view);
+            } else {
+                view['@{~view#async.count}'] = 0;
+                /*#}#*/
+                /*
+                    在dom diff patch时，如果已渲染的vframe有变化，则会在vom tree上先派发created事件，同时传递inner标志，vom tree处理alter事件派发状态，未进入created事件派发状态
+        
+                    patch完成后，需要设置vframe hold fire created事件，因为带有assign方法的view在调用render后，vom tree处于就绪状态，此时会导致提前派发created事件，应该hold，统一在endUpdate中派发
+        
+                    有可能不需要endUpdate，所以hold fire要视情况而定
+                */
+                tmpl = ref['@{~updater-ref#changed}'] || !view['@{~view#rendered}'];
+                for (vdom of ref['@{~updater-ref#view.renders}']) {
+                    /*#if(modules.async){#*/
+                    CallFunction(vdom['@{~view#render.short}'], Empty_Array, vdom);
+                    /*#}else{#*/
+                    CallFunction(View_CheckAssign, [vdom]);
+                    /*#}#*/
+                }
+                if (tmpl) {
+                    CallFunction(View_EndUpdate, [view]);
+                }
+                /*#if(modules.mxevent){#*/
+                view.fire('domready');
+                /*#}#*/
+                /*#if(modules.async){#*/
+            }
         }
-        if (tmpl) {
-            view.endUpdate();
-        }
-        /*#if(modules.mxevent){#*/
-        view.fire('domready');
+        V_SetChildNodes(view.root, view['@{~view#updater.vdom}'], vdom, ref, vf, keys, view, ready);
         /*#}#*/
     }
 };

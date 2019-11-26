@@ -3,16 +3,19 @@ let Win_History = Doc_Window.history;
 let Router_DidUpdate;
 let Router_UpdateState = (path, replace?: boolean) => Win_History[replace ? 'replaceState' : 'pushState'](Empty, Empty, path);
 let Router_Popstate;
+/*#if(modules.routerTip){#*/
+let Router_Tip_Beforeunload;
+/*#}#*/
 let Router_Update = (path, params, loc, replace, silent) => {
-    path = ToUri(path, params);
+    path = Router_PNR_Rebuild(path, params);
     if (path != loc.srcQuery) {
         Router_Silent = silent;
         Router_UpdateState(path, replace);
-        if (Router_Popstate) {
-            Router_Popstate(1);
-        } else {
-            Router_Diff();
-        }
+        /*#if(modules.routerTip){#*/
+        Router_Popstate(1);
+        /*#}else{#*/
+        Router_Diff();
+        /*#}#*/
     }
 };
 let Router_Bind = () => {
@@ -33,7 +36,7 @@ let Router_Bind = () => {
         }
         if (newHref != lastHref) {
             resolve = () => {
-                e.p = 1;
+                e['@{~router-tip#suspend}'] = 1;
                 suspend = Empty;
                 lastHref = newHref;
                 if (!f) Router_UpdateState(newHref);
@@ -42,13 +45,14 @@ let Router_Bind = () => {
             e = {
                 reject() {
                     suspend = Empty;
-                    e.p = 1;
+                    e['@{~router-tip#suspend}'] = 1;
                     /*#if(!modules.routerTipLockUrl){#*/
                     Router_UpdateState(lastHref);
                     /*#}#*/
                 },
                 resolve,
-                prevent() {
+                stop() {
+                    e['@{~router-tip#suspend}'] = 1;
                     suspend = 1;
                     /*#if(modules.routerTipLockUrl){#*/
                     Router_UpdateState(lastHref);
@@ -56,22 +60,22 @@ let Router_Bind = () => {
                 }
             };
             Router.fire(Change, e);
-            if (!suspend && !e.p) {
+            if (!suspend && !e['@{~router-tip#suspend}']) {
                 resolve();
             }
         }
     });
-    AddEventListener(Doc_Window, 'onbeforeunload', (e, te, msg) => {
+    AddEventListener(Doc_Window, 'onbeforeunload', Router_Tip_Beforeunload = (e, te, msg) => {
         e = e || Doc_Window.event;
         te = {};
         Router.fire(Page_Unload, te);
-        if ((msg = te.msg)) {
+        if ((msg = te['@{~page-tip#msg}'])) {
             if (e) e.returnValue = msg;
             return msg;
         }
     });
     /*#}else{#*/
-    AddEventListener(Doc_Window, 'popstate', () => {
+    AddEventListener(Doc_Window, 'popstate', Router_Popstate = () => {
         let initPop = !Router_DidUpdate && Router_WinLoc.href == initialURL;
         Router_DidUpdate = 1;
         if (initPop) return;
@@ -79,5 +83,12 @@ let Router_Bind = () => {
     });
     /*#}#*/
     Router_Diff();
+};
+let Router_Unbind = () => {
+    RemoveEventListener(Doc_Window, 'popstate', Router_Popstate);
+    /*#if(modules.routerTip){#*/
+    RemoveEventListener(Doc_Window, 'beforeunload', Router_Tip_Beforeunload);
+    /*#}#*/
+    Router_LLoc = Router_Init_Loc;
 };
 /*#}#*/

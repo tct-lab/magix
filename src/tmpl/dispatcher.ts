@@ -23,18 +23,18 @@ let View_IsObserveChanged = view => {
  * @param {Vframe} vframe vframe对象
  * @private
  */
-let Dispatcher_Update = (vframe, view?, cs?, c?) => {
+let Dispatcher_Update = async (vframe, view?, cs?, c?) => {
     if (vframe && vframe['@{~vframe#update.tag}'] != Dispatcher_UpdateTag &&
         (view = vframe['@{~vframe#view.entity}']) &&
-        view['@{~view#sign}'] > 1) {
+        view['@{~view#sign}']) {
         if (View_IsObserveChanged(view)) { //检测view所关注的相应的参数是否发生了变化
-            CallFunction(view['@{~view#render.short}'], Empty_Array, view);
-            //view['@{~view#render.short}']();
+            //CallFunction(view['@{~view#render.short}'], Empty_Array, view);
+            await view['@{~view#render.short}']();
         }
         cs = vframe.children();
         for (c of cs) {
-            //CallFunction(Dispatcher_Update, [Vframe_Vframes[c]]);
-            Dispatcher_Update(Vframe_Vframes[c]);
+            CallFunction(Dispatcher_Update, [Vframe_Vframes[c]]);
+            //Dispatcher_Update(Vframe_Vframes[c]);
         }
     }
 };

@@ -20,8 +20,11 @@ let modules = {
 
     mixins: 1,//view提供mixins和merge功能
     recast: 1,//拦截渲染
+    require: 1,//模块加载前处理逻辑
     xml: 1,//是否支持svg math等标签
     customTags: 1,//自定义标签
+    checkAttr: 1,//子view属性变化时，是否通知更新
+    webc: 1,//webcomponent
 
     service: 1,//接口服务
     state: 1,//Magix.State对象
@@ -57,7 +60,9 @@ module.exports = (options, cb) => {
         let others = [];
         m.split(',').forEach(m => {
             m = m.trim();
-            map[m] = 1;
+            if (modules[m]) {
+                map[m] = 1;
+            }
         });
         for (let p in modules) {
             if (!map[p]) {

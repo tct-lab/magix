@@ -84,6 +84,13 @@
         recast?: (e: RouterDiff) => void
         /*#}#*/
         /*#}#*/
+        /*#if(modules.require){#*/
+        /**
+         * 在异步加载模块前执行的方法
+         * @param modules 模块列表
+         */
+        require?: (modules: string[]) => Promise<void>
+        /*#}#*/
         /**
          * 其它配置项
          */
@@ -571,6 +578,10 @@
         vframe: Vframe
     }> {
         /**
+         * 获取根vframe
+         */
+        root(): Vframe | null
+        /**
          * 获取当前页面上所有的vframe
          */
         all(): {
@@ -580,12 +591,12 @@
          * 根据id获取vframe
          * @param id
          */
-        byId(id: string): Vframe
+        byId(id: string): Vframe | null
         /**
          * 根据节点获取vframe
          * @param node 节点对象
          */
-        byNode(node: HTMLElement): Vframe
+        byNode(node: HTMLElement): Vframe | null
 
         /**
          * 当vframe创建并添加到管理对象上时触发
@@ -639,9 +650,8 @@
          */
         render(...args: any[]): void
         /**
-         * 更新某个节点的html，该方法内部会自动处理相关的子view
-         * @param id 设置html的节点id
-         * @param html 待设置的html
+         * 更新当前view的数据
+         * @param data 赋值数据
          */
         assign(data: object): boolean
 
@@ -657,30 +667,6 @@
          * @param observeObject 参数对象
          */
         observeLocation(observeObject: ViewObserveLocation): void
-        // /**
-        //  * 通知当前view某个节点即将开始进行html的更新
-        //  * @param node 哪块区域需要更新，默认当前view
-        //  */
-        // beginUpdate(node?: HTMLElement): void
-        /**
-         * 通知当前view某个节点结束html的更新
-         * @param node 哪块区域需要更新，默认当前view
-         */
-        endUpdate(node?: HTMLElement): void
-        /**
-         * 获取一个更新记号函数
-         * @param update 是否更新记号
-         */
-        getMarker(update?: boolean): () => boolean
-        /**
-         * 包装异步回调
-         * 为什么要包装？
-         * 在单页应用的情况下，一些异步(如setTimeout,ajax等)回调执行时，当前view已经被销毁。如果你的回调中去操作了DOM，
-         * 则会出错，为了避免这种情况的出现，可以调用该方法包装一次，magix会确保你的回调在view未销毁的情况下被调用
-         * @param callback 回调方法
-         * @param context 回调方法执行时的this指向
-         */
-        //wrapAsync<TThisType>(callback: (this: TThisType, ...args: any[]) => void, context?: TThisType): (...args: any[]) => void
         /*#if(modules.router&&modules.routerTip){#*/
         /**
          * 离开确认方法，需要开发者实现离开的界面和逻辑
@@ -707,6 +693,10 @@
          * @param unchanged 指示哪些数据并没有变化的对象
          */
         set(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, ): this
+        /**
+         * 获取设置数据后，是否发生了改变
+         */
+        changed(): boolean
         /**
          * 检测数据变化，更新界面，放入数据后需要显式调用该方法才可以把数据更新到界面
          * @param data 数据对象，如{a:20,b:30}
@@ -738,11 +728,6 @@
          * view销毁时触发
          */
         ondestroy: (this: this, e?: TriggerEventDescriptor) => void;
-
-        /**
-         * 当render方法被调用时触发
-         */
-        onrendercall: (this: this, e?: TriggerEventDescriptor) => void;
     }
     /**
      * View类
@@ -890,7 +875,11 @@
          * 应用初始化入口
          * @param cfg 配置信息参数对象
          */
-        boot(cfg: Config): void
+        boot(cfg?: Config): void
+        /**
+         * 取消安装
+         */
+        unboot(): void
         /**
          * 把列表转化成hash对象。Magix.toMap([1,2,3,5,6]) => {1:1,2:1,3:1,4:1,5:1,6:1}。Magix.toMap([{id:20},{id:30},{id:40}],'id') => {20:{id:20},30:{id:30},40:{id:40}}
          * @param list 源数组
@@ -951,7 +940,7 @@
          * @param deps 模块id
          * @param callback 回调
          */
-        use(deps: string | string[], callback: (...args: object[]) => any): void
+        use<T extends object>(deps: string | string[], callback: (...args: T[]) => any): void
 
         /**
          * 保护对象不被修改
@@ -988,12 +977,24 @@
          */
         guid(prefix?: string): string
         /**
+         * 获取异步标识
+         * @param host 宿主对象
+         * @param key 标识key
+         */
+        mark(host: object, key: string): () => boolean
+        /**
+         * 销毁所有异步标识
+         * @param host 宿主对象
+         */
+        unmark(host: object): void
+        /**
          * 安排、优化待执行的函数
          * @param fn 执行函数
          * @param args 参数
          * @param context this指向
+         * @param id 任务id,当指定id且同样id有多个时,会取消前面的执行
          */
-        task<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext): void
+        task<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext, id?: string): void
 
         /*#if(modules.service){#*/
         /**

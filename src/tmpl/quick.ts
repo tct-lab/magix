@@ -1,11 +1,12 @@
 let Q_TEXTAREA = 'textarea';
-let Q_Create = (tag, props, children, unary) => {
+let Q_Empty_Object = {};
+let Q_Create = (tag, props, children, specials, unary) => {
     //html=tag+to_array(attrs)+children.html
     let token;
     if (tag) {
-        props = props || {};
+        props = props || Q_Empty_Object;
         let compareKey = Empty,
-            hasMxv,
+            hasMxv = specials,
             prop, value, c,
             reused = {},
             outerHTML = '<' + tag,
@@ -40,6 +41,7 @@ let Q_Create = (tag, props, children, unary) => {
                 }
             }
         }
+        specials = specials || Q_Empty_Object;
         for (prop in props) {
             value = props[prop];
             //布尔值
@@ -48,7 +50,7 @@ let Q_Create = (tag, props, children, unary) => {
                 delete props[prop];
                 continue;
             } else if (value === true) {
-                props[prop] = value = Empty;
+                props[prop] = value = specials[prop] ? value : Empty;
             }
             if (prop == Tag_Prop_Id) {//如果有id优先使用
                 compareKey = value;
@@ -57,11 +59,8 @@ let Q_Create = (tag, props, children, unary) => {
                 !compareKey) {
                 //否则如果是组件,则使用组件的路径做为key
                 compareKey = ParseUri(value)[Path];
-            } else if (prop == Tag_Static_Key/*#if(modules.customTags){#*/ || prop == Tag_Prop_Is/*#}#*/) {
-                if (!compareKey) {
-                    compareKey = value;
-                }
-                //newChildren = Empty_Array;
+            } else if ((prop == Tag_Static_Key/*#if(modules.customTags){#*/ || prop == Tag_Prop_Is/*#}#*/) && !compareKey) {
+                compareKey = value;
             } else if (prop == Tag_View_Params_Key) {
                 hasMxv = 1;
             }
@@ -69,7 +68,7 @@ let Q_Create = (tag, props, children, unary) => {
                 tag == Q_TEXTAREA) {
                 innerHTML = value;
             } else if (!Has(V_SKIP_PROPS, prop)) {
-                outerHTML += ` ${prop}="${Updater_Encode(value)}"`;
+                outerHTML += ` ${prop}="${value && Updater_Encode(value)}"`;
             }
         }
         /*#if(modules.customTags){#*/
@@ -85,7 +84,8 @@ let Q_Create = (tag, props, children, unary) => {
             '@{~v#node.html}': innerHTML,
             '@{~v#node.compare.key}': compareKey,
             '@{~v#node.tag}': tag,
-            '@{~v#node.has.mxv}': hasMxv || Has(V_SPECIAL_PROPS, tag),
+            '@{~v#node.has.mxv}': hasMxv,
+            '@{~v#node.attrs.specials}': specials,
             '@{~v#node.attrs}': attrs,
             '@{~v#node.attrs.map}': props,
             '@{~v#node.children}': newChildren,

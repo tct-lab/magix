@@ -151,13 +151,19 @@ let Body_FindVframeInfo = (current, eventType) => {
 };
 
 let Body_DOMEventProcessor = domEvent => {
-    let { target, type } = domEvent;
+    let { target, type/*#if(modules.webc){#*/, composed/*#}#*/ } = domEvent;
+    /*#if(modules.webc){#*/
+    if (composed) {
+        target = domEvent.composedPath()[0];
+    }
+    /*#}#*/
     let eventInfos;
     let ignore;
     let vframe, view, eventName, fn;
     let lastVfId;
     let params, arr = [];
-    while (target != Doc_Body) {
+    while (target &&
+        target.nodeType == 1) {
         if (domEvent.cancelBubble ||
             (ignore = target['@{~node#ignore.events}']) && ignore[type]) {
             break;
@@ -184,17 +190,13 @@ let Body_DOMEventProcessor = domEvent => {
                         fn = view[eventName];
                         if (fn) {
                             domEvent.eventTarget = target;
-                            params = i ? ParseExpr(i, view['@{~view#updater.ref.data}']) : Body_Empty_Object;
+                            params = i ? ParseExpr(i, vframe['@{~vframe#ref.data}']) : Body_Empty_Object;
                             domEvent[Params] = params;
                             ToTry(fn, domEvent, view);
                         }
                         if (DEBUG) {
                             if (!fn) { //检测为什么找不到处理函数
-                                if (eventName[0] == '\u001f') {
-                                    console.error('use view.wrapEvent wrap your html');
-                                } else {
-                                    console.error('can not find event processor:' + n + '<' + type + '> from view:' + vframe.path);
-                                }
+                                console.error('can not find event processor:' + n + '<' + type + '> from view:' + vframe.path);
                             }
                         }
                     }
@@ -208,7 +210,7 @@ let Body_DOMEventProcessor = domEvent => {
                 }
             }
         }
-        target = target.parentNode || Doc_Body;
+        target = target.parentNode;
     }
     for (lastVfId of arr) {
         ignore = lastVfId['@{~node#ignore.events}'] || (lastVfId['@{~node#ignore.events}'] = {});

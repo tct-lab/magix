@@ -3,7 +3,7 @@ let fs = require('fs');
 let customize = require('./customize');
 
 let type = 'cmd,module';
-let enableModules = 'mixins,router,routerHash,rich,richView';
+let enableModules = 'rich,mixins,mxevent,richVframe,xml';
 
 gulp.task('combine', () => {
     type.split(',').forEach(t => {

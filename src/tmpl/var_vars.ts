@@ -12,8 +12,8 @@ let Doc_Document = document;
 let Timeout = Doc_Window.setTimeout;//setTimeout;
 let Encode = encodeURIComponent;
 let Value = 'value';
-let Tag_Static_Key = 'mxs';
-let Tag_View_Params_Key = 'mxv';
+let Tag_Static_Key = '_';
+let Tag_View_Params_Key = '$';
 let Tag_Prop_Id = 'id';
 /*#if(modules.customTags){#*/
 let Tag_Prop_Is = 'is';
@@ -39,13 +39,14 @@ let ToString = Object[Prototype].toString;
 let Type = o => ToString.call(o).slice(8, -1);
 let IsObject = o => Type(o) == 'Object';
 let IsArray = Array.isArray;
-let GUID = (prefix?) => (prefix || 'mx_') + Counter++;
+let GUID = (prefix?) => (prefix || Tag_Static_Key) + Counter++;
 let GetById = id => Doc_Document.getElementById(id);
 let SetInnerHTML = (n, html) => n.innerHTML = html;
-let MxGlobalView = GUID();
 let Mx_Cfg = {
     rootId: GUID(),
-    defaultView: MxGlobalView,
+    /*#if(modules.require){#*/
+    async require() { },
+    /*#}#*/
     error(e) {
         throw e;
     }
@@ -63,6 +64,22 @@ let NodeIn = (a, b, r?) => {
     }
     return r;
 };
+let Mark = (me, key, host?, m?, k?) => {
+    k = Spliter + '@{~mark#object.deleted}';
+    if (!me[k]) {
+        k = Spliter + '@{~mark#object}';
+        host = me[k] || (me[k] = {});
+        if (!Has(host, key)) {
+            host[key] = 0;
+        }
+        m = ++host[key];
+    }
+    return t => (t = me[k], t && m === t[key]);
+};
+let Unmark = me => {
+    me[Spliter + '@{~mark#object}'] = 0;
+    me[Spliter + '@{~mark#object.deleted}'] = 1;
+};
 let {
     assign: Assign,
     /*#if(modules.richVframe||modules.router){#*/
@@ -71,15 +88,15 @@ let {
     hasOwnProperty: HasProp
 } = Object;
 let Header = Doc_Document.head;
-let Temp = Doc_Document.createElement('div');
-let GA = Temp.getAttribute;
+let GA = Doc_Body.getAttribute;
 let GetAttribute = (node, attr) => GA.call(node, attr);
-let ApplyStyle = (key, css) => {
+let ApplyStyle = (key, css, node) => {
     if (DEBUG && IsArray(key)) {
+        let result = [];
         for (let i = 0; i < key.length; i += 2) {
-            ApplyStyle(key[i], key[i + 1]);
+            result.push(ApplyStyle(key[i], key[i + 1]));
         }
-        return;
+        return result;
     }
     if (css && !ApplyStyle[key]) {
         ApplyStyle[key] = 1;
@@ -87,11 +104,26 @@ let ApplyStyle = (key, css) => {
             if (key.indexOf('$throw_') === 0) {
                 throw new Error(css);
             }
-            SetInnerHTML(Temp, `<style id="${key}">${css}`);
-            Header.appendChild(Temp.firstChild);
+            node = Doc_Document.createElement('style');
+            node.id = key;
+            SetInnerHTML(node, css);
+            Header.appendChild(node);
+            /*#if(modules.removeStyle){#*/
+            return () => {
+                ApplyStyle[key] = Null;
+                Header.removeChild(node);
+            };
+            /*#}#*/
         } else {
-            SetInnerHTML(Temp, `<style>${css}`);
-            Header.appendChild(Temp.firstChild);
+            node = Doc_Document.createElement('style');
+            SetInnerHTML(node, css);
+            Header.appendChild(node);
+            /*#if(modules.removeStyle){#*/
+            return () => {
+                ApplyStyle[key] = Null;
+                Header.removeChild(node);
+            };
+            /*#}#*/
         }
     }
 };
@@ -113,8 +145,8 @@ let TranslateData = (data, params) => {
     let p, val;
     if (IsPrimitive(params)) {
         p = params + Empty;
-        if (p[0] == Spliter && data.has(p)) {
-            params = data.get(p);
+        if (p[0] == Spliter) {
+            params = data[p];
         }
     } else {
         for (p in params) {

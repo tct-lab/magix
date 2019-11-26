@@ -3,7 +3,7 @@
   "version": "3.0.0",
   "private": true,
   "devDependencies": {
-    "gulp": "^3.9.1",
+    "gulp": "^4.0.2",
     "typescript": "^3.4.5"
   }
 }

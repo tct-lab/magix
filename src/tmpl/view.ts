@@ -1,5 +1,8 @@
 //like 'login<click>' or '$<click>' or '$win<scroll>' or '$win<scroll>&passive,capture'
 let View_EvtMethodReg = /^(\$?)([^<]*)<([^>]+)>(?:&(.+))?$/;
+/*#if(modules.router&&modules.routerTip){#*/
+let View_Tip_Suspend;
+/*#}#*/
 /*#if(modules.mixins){#*/
 let processMixinsSameEvent = (exist, additional, temp?) => {
     if (exist['@{~viewmixin#list}']) {
@@ -15,22 +18,32 @@ let processMixinsSameEvent = (exist, additional, temp?) => {
     return temp;
 };
 /*#}#*/
-let View_WrapMethod = (prop, fName, short, fn?, me?) => {
-    if (prop[fName] != prop[short]) {
-        fn = prop[fName];
-        prop[fName] = prop[short] = function (...args) {
-            me = this;
-            if (me['@{~view#assign.sign}']) {
-                me['@{~view#assign.sign}']--;
-            }
-            if (me['@{~view#sign}'] > 0 && !me['@{~view#assign.sign}']) { //signature
-                me['@{~view#sign}']++;
-                /*#if(modules.mxevent){#*/
-                me.fire('rendercall');
-                /*#}#*/
-                ToTry(fn, args, me);
-            }
-        };
+/*#if(!modules.async){#*/
+let View_CheckAssign = view => {
+    if (view['@{~view#assign.sign}']) {
+        view['@{~view#assign.sign}']--;
+    }
+    if (view['@{~view#sign}'] && !view['@{~view#assign.sign}']) { //signature
+        ToTry(view['@{~view#render.short}'], Empty_Array, view);
+    }
+};
+/*#}#*/
+let View_EndUpdate = view => {
+    /*#if(modules.richVframe){#*/let o, f;/*#}#*/
+    if (view['@{~view#sign}']) {
+        /*#if(modules.richVframe){#*/
+        f = view['@{~view#rendered}'];
+        /*#}#*/
+        view['@{~view#rendered}'] = 1;
+        /*#if(modules.richVframe){#*/
+        o = view.owner;
+        o.mountZone();
+        if (!f) {
+            Timeout(Vframe_RunInvokes, 0, o);
+        }
+        /*#}else{#*/
+        view.owner.mountZone();
+        /*#}#*/
     }
 };
 let View_DelegateEvents = (me, destroy) => {
@@ -48,7 +61,8 @@ let View_DelegateEvents = (me, destroy) => {
 };
 let View_Globals = {
     win: Doc_Window,
-    doc: Doc_Document
+    doc: Doc_Document,
+    body: Doc_Body
 };
 /*#if(modules.mixins){#*/
 let View_MergeMixins = (mixins, proto, ctors) => {
@@ -66,8 +80,10 @@ let View_MergeMixins = (mixins, proto, ctors) => {
                 } else {
                     fn['@{~viewmixin#is.mixin}'] = 1;
                 }
-            } else if (DEBUG && exist && p != 'extend' && p != Spliter) { //只在开发中提示
-                Mx_Cfg.error(Error('merge duplicate:' + p));
+            } else if (DEBUG &&
+                exist &&
+                fn != exist) { //只在开发中提示
+                Mx_Cfg.error(Error('plugins duplicate property:' + p));
             }
             temp[p] = fn;
         }
@@ -186,8 +202,7 @@ let View_Prepare = oView => {
                 }
             }
         }
-        //console.log(prop);
-        View_WrapMethod(prop, 'render', '@{~view#render.short}');
+        prop['@{~view#render.short}'] = prop.render;
         prop['@{~view#events.object}'] = eventsObject;
         prop['@{~view#events.list}'] = eventsList;
         prop['@{~view#selector.events.object}'] = selectorObject;
@@ -203,6 +218,7 @@ function View(id, root, owner/*#if(modules.mixins){#*/, ops/*#}#*/, me) {
     me.root = root;
     me.owner = owner;
     me.id = id;
+    me[Spliter] = id;
     /*#if(modules.router){#*/
     me['@{~view#observe.router}'] = {
         '@{~view-router#observe.params}': []
@@ -210,12 +226,25 @@ function View(id, root, owner/*#if(modules.mixins){#*/, ops/*#}#*/, me) {
     /*#}#*/
     me['@{~view#sign}'] = 1; //标识view是否刷新过，对于托管的函数资源，在回调这个函数时，不但要确保view没有销毁，而且要确保view没有刷新过，如果刷新过则不回调
     me['@{~view#updater.data.changed}'] = 1;
-    me['@{~view#updater.data}'] = {
-        id
-    };
-    me['@{~view#updater.ref.data}'] = new Map();
+
+    if (DEBUG) {
+        me['@{~view#updater.data}'] = Safeguard({
+            id
+        }, true, key => {
+            if (key == 'id') {
+                throw new Error(`avoid write ${key} to view data!`);
+            }
+        });
+    } else {
+        me['@{~view#updater.data}'] = {
+            id
+        };
+    }
     me['@{~view#updater.keys}'] = {};
     me['@{~view#assign.sign}'] = 0;
+    /*#if(modules.async){#*/
+    me['@{~view#async.count}'] = 0;
+    /*#}#*/
     /*#if(modules.mixins){#*/
     id = View['@{~view-factory#ctors}'];
     if (id) ToTry(id, ops, me);
@@ -230,65 +259,47 @@ Assign(View, {
 Assign(View[Prototype], /*#if(modules.mxevent){#*/MxEvent,/*#}#*/ {
     init: Noop,
     render: Noop,
-    /*#if(modules.reserve){#*/
-    beginUpdate(node, me) {
-        me = this;
-        if (me['@{~view#sign}'] > 0 && me['@{~view#rendered}']) {
-            me.owner.unmountZone(node);
-        }
-    },
-    /*#}#*/
-    endUpdate(node, me/*#if(modules.rich){#*/, o, f/*#}#*/) {
-        me = this;
-        if (me['@{~view#sign}'] > 0) {
-            /*#if(modules.rich){#*/
-            f = me['@{~view#rendered}'];
-            /*#}#*/
-            me['@{~view#rendered}'] = 1;
-            /*#if(modules.rich){#*/
-            o = me.owner;
-            o.mountZone(node);
-            if (!f) {
-                Timeout(Vframe_RunInvokes, 0, o);
-            }
-            /*#}else{#*/
-            me.owner.mountZone(node);
-            /*#}#*/
-        }
-    },
-    getMarker(update) {
-        let me = this,
-            s = update ? ++me['@{~view#sign}'] : me['@{~view#sign}'];
-        return () => s > 0 && s == me['@{~view#sign}'];
-    },
+    assign: Noop,
     /*#if(modules.router&&modules.routerTip){#*/
     leaveTip(msg, fn) {
         let me = this;
         let changeListener = e => {
-            let a = '@{~tip#router.change}', // a for router change
-                b = '@{~tip#view.unload}'; // b for viewunload change
-            if (e.type != Change) {
-                a = '@{~tip#view.unload}';
-                b = '@{~tip#router.change}';
-            }
-            if (changeListener[a]) {
-                e.prevent();
-                e.reject();
+            if (View_Tip_Suspend) {
+                e.stop();
             } else if (fn()) {
-                e.prevent();
-                changeListener[b] = 1;
-                me.leaveConfirm(() => {
-                    changeListener[b] = 0;
+                e.stop();
+                View_Tip_Suspend = 1;
+                me.leaveConfirm(msg, () => {
+                    View_Tip_Suspend = 0;
                     e.resolve();
                 }, () => {
-                    changeListener[b] = 0;
+                    View_Tip_Suspend = 0;
                     e.reject();
-                }, msg);
+                });
             }
+            // let a = '@{~leave#router.change}', // a for router change
+            //     b = '@{~leave#view.unload}'; // b for viewunload change
+            // if (e.type != Change) {
+            //     a = '@{~leave#view.unload}';
+            //     b = '@{~leave#router.change}';
+            // }
+            // if (changeListener[a]) {
+            //     e.stop();
+            // } else if (!e['@{~router-tip#suspend}'] && fn()) {
+            //     e.stop();
+            //     changeListener[b] = 1;
+            //     me.leaveConfirm(msg, () => {
+            //         changeListener[b] = 0;
+            //         e.resolve();
+            //     }, () => {
+            //         changeListener[b] = 0;
+            //         e.reject();
+            //     });
+            // }
         };
         let unloadListener = e => {
-            if (fn()) {
-                e.msg = msg;
+            if (!e['@{~page-tip#msg}'] && fn()) {
+                e['@{~page-tip#msg}'] = msg;
             }
         };
         Router.on(Change, changeListener);
@@ -330,7 +341,8 @@ Assign(View[Prototype], /*#if(modules.mxevent){#*/MxEvent,/*#}#*/ {
         for (p in newData) {
             now = newData[p];
             old = oldData[p];
-            if ((!IsPrimitive(now) || old !== now) && !Has(unchanged, p)) {
+            if ((!IsPrimitive(now) || old != now) &&
+                !Has(unchanged, p)) {
                 keys[p] = 1;
                 changed = 1;
             }
@@ -338,6 +350,12 @@ Assign(View[Prototype], /*#if(modules.mxevent){#*/MxEvent,/*#}#*/ {
         }
         me['@{~view#updater.data.changed}'] = changed;
         return me;
+    },
+    changed() {
+        if (DEBUG) {
+            return Boolean(this['@{@{~view#updater.data.changed}}']);
+        }
+        return this['@{@{~view#updater.data.changed}}'];
     },
     digest(data, unchanged) {
         let me = this.set(data, unchanged);
@@ -356,16 +374,27 @@ Assign(View[Prototype], /*#if(modules.mxevent){#*/MxEvent,/*#}#*/ {
 
             如果在digest的过程中，多次调用自身的digest，则后续的进行排队。前面的执行完成后，排队中的一次执行完毕
         */
-        if (DEBUG) {
-            if (!me['@{~view#digesting.count}']) {
-                me['@{~view#digesting.count}'] = 1;
-                Updater_Digest(me);
-                me['@{~view#digesting.count}'] = 0;
-            } else if (DEBUG) {
-                console.error('Avoid redigest while updater is digesting');
+        if (me['@{~view#updater.data.changed}'] && me['@{~view#sign}']) {
+            /*#if(modules.async){#*/
+            if (!me['@{~view#async.count}']) {
+                me['@{~view#async.count}']++;
+                Updater_Digest(me, 1);
+            } else {
+                me['@{~view#async.count}']++;
             }
-        } else {
-            Updater_Digest(me);
+            /*#}else{#*/
+            if (DEBUG) {
+                if (!me['@{~view#digesting.count}']) {
+                    me['@{~view#digesting.count}'] = 1;
+                    Updater_Digest(me);
+                    me['@{~view#digesting.count}'] = 0;
+                } else if (DEBUG) {
+                    console.error('Avoid redigest while updater is digesting');
+                }
+            } else {
+                Updater_Digest(me);
+            }
+            /*#}#*/
         }
     }
     /*#if(modules.richView){#*/,
@@ -380,11 +409,11 @@ Assign(View[Prototype], /*#if(modules.mxevent){#*/MxEvent,/*#}#*/ {
             return me['@{~view#updater.data.string}'] != JSON_Stringify(me['@{~view#updater.data}']);
         }
     },
-    translate(data) {
-        return TranslateData(this['@{~view#updater.data}'], data);
-    },
+    // translate(data) {
+    //     return TranslateData(this['@{~view#updater.data}'], data);
+    // },
     parse(origin) {
-        return ParseExpr(origin, this['@{~view#updater.ref.data}']);
+        return ParseExpr(origin, this.owner['@{~vframe#ref.data}']);
     }
     /*#}#*/
 });

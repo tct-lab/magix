@@ -1,10 +1,11 @@
-let CacheSort = (a, b) => b['@{~cache-item#fre}'] - a['@{~cache-item#fre}'] || b['@{~cache-item#add.time}'] - a['@{~cache-item#add.time}'];
-function MxCache(max?: number, buffer?: number, remove?: (item: any) => void, me?: any) {
+let CacheSort = (a, b) => b['@{~cache-item#fre}'] - a['@{~cache-item#fre}'];
+//let CacheCounter = 0;
+function MxCache(max?: number, buffer?: number/*, remove?: (item: any) => void*/, me?: any) {
     me = this;
     me['@{~cache#list}'] = [];
     me['@{~cache#buffer.count}'] = buffer || 5; //buffer先取整，如果为0则再默认5
     me['@{~cache#max.count}'] = me['@{~cache#buffer.count}'] + (max || 20);
-    me['@{~cache#remove.callback}'] = remove;
+    //me['@{~cache#remove.callback}'] = remove;
 }
 
 Assign(MxCache[Prototype], {
@@ -14,7 +15,7 @@ Assign(MxCache[Prototype], {
         let r = c[Spliter + key];
         if (r) {
             r['@{~cache-item#fre}']++;
-            r['@{~cache-item#add.time}'] = Counter++;
+            //r['@{~cache-item#add.time}'] = CacheCounter++;
             r = r['@{~cache-item#entity}'];
         }
         return r;
@@ -43,20 +44,20 @@ Assign(MxCache[Prototype], {
         }
         r['@{~cache-item#entity}'] = value;
         r['@{~cache-item#fre}'] = 1;
-        r['@{~cache-item#add.time}'] = Counter++;
+        //r['@{~cache-item#add.time}'] = CacheCounter++;
     },
     del(k) {
         k = Spliter + k;
         let c = this['@{~cache#list}'];
-        let r = c[k],
-            m = this['@{~cache#remove.callback}'];
+        let r = c[k]/*,
+            m = this['@{~cache#remove.callback}']*/;
         if (r) {
             r['@{~cache-item#fre}'] = -1;
             r['@{~cache-item#entity}'] = Empty;
-            delete c[k];
-            if (m) {
-                ToTry(m, r['@{~cache-item#origin.key}']);
-            }
+            c[k] = Null;
+            //if (m) {
+            //ToTry(m, r['@{~cache-item#origin.key}']);
+            //}
         }
     },
     has(k) {
