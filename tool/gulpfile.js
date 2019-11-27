@@ -2,12 +2,12 @@ let gulp = require('gulp');
 let fs = require('fs');
 let customize = require('./customize');
 
-let type = 'cmd,module';
+let type = 'umd,module';
 let enableModules = 'rich,mixins,mxevent,richVframe,xml';
 
 gulp.task('combine', () => {
     type.split(',').forEach(t => {
-        if (t == 'cmd') {
+        if (t == 'umd') {
             customize({
                 moduleId: 'magix5',
                 loaderType: t,

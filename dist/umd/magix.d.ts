@@ -1,7 +1,7 @@
 /*!5.0.1 Licensed MIT*/
 /*
 author:kooboy_li@163.com
-loader:cmd
+loader:umd
 enables:rich,mixins,mxevent,richVframe,xml
 
 optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,recast,require,customTags,checkAttr,webc,service,state,seajs
@@ -668,6 +668,10 @@ optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,reca
          */
         set(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, ): this
         /**
+         * 获取设置数据后，是否发生了改变
+         */
+        changed(): boolean
+        /**
          * 检测数据变化，更新界面，放入数据后需要显式调用该方法才可以把数据更新到界面
          * @param data 数据对象，如{a:20,b:30}
          * @param unchanged 指示哪些数据并没有变化的对象
@@ -964,7 +968,7 @@ optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,reca
          * @param context this指向
          * @param id 任务id,当指定id且同样id有多个时,会取消前面的执行
          */
-        task<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext,id?:string): void
+        task<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext, id?: string): void
 
         
 

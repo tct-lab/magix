@@ -25,7 +25,8 @@ let Tag_Prop_Id = 'id';
 let Hash_Key = '#';
 function Noop() { }
 
-let Doc_Body = Doc_Document.body;
+let Header = Doc_Document.head;
+let Doc_Body;
 let Pfm = Doc_Window.performance;
 let Date_Now = Pfm.now.bind(Pfm);
 /*
@@ -87,8 +88,7 @@ let {
     
     hasOwnProperty: HasProp
 } = Object;
-let Header = Doc_Document.head;
-let GA = Doc_Body.getAttribute;
+let GA = Header.getAttribute;
 let GetAttribute = (node, attr) => GA.call(node, attr);
 let ApplyStyle = (key, css, node) => {
     if (DEBUG && IsArray(key)) {
@@ -342,8 +342,10 @@ let StartCall = () => {
     while (CallBreakTime) {
         next = CallList[CallIndex - 1];
         if (next) {
-            //ToTry(next, CallList[CallIndex + 1], CallList[CallIndex]);
-            next.apply(CallList[CallIndex], CallList[CallIndex + 1]);
+            if (next !== Null) {
+                //ToTry(next, CallList[CallIndex + 1], CallList[CallIndex]);
+                next.apply(CallList[CallIndex], CallList[CallIndex + 1]);
+            }
             CallIndex += 4;
             if (Date_Now() - last > CallBreakTime &&
                 CallList.length > CallIndex) {
@@ -365,12 +367,16 @@ let CallFunction = (fn, args?, context?, id?) => {
     if (id) {
         for (let i = CallIndex; i < CallList.length; i += 4) {
             if (CallList[i + 2] == id) {
-                CallList[i - 1] = Noop;
+                CallList[i - 1] = Null;
                 console.log('ignore id', id);
             }
         }
     }
     CallList.push(fn, context, args, id);
+};
+
+let SafeCallFunction = (fn, args?, context?, id?) => {
+    CallFunction(ToTry, [fn, args, context], Null, id);
 };
 let M_Ext = '.js';
 let ImportPromises = {};
@@ -548,7 +554,6 @@ let MxEvent = {
 let Vframe_RootVframe;
 let Vframe_Vframes = {};
 let Vframe_RootId;
-
 let Vframe_TranslateQuery = (pId, src, params, pVf?) => {
     if (src.includes(Spliter) &&
         (pVf = Vframe_Vframes[pId])) {
@@ -557,6 +562,7 @@ let Vframe_TranslateQuery = (pId, src, params, pVf?) => {
 };
 let Vframe_Root = (rootId?, e?) => {
     if (!Vframe_RootVframe) {
+        Doc_Body = Doc_Document.body;
         rootId = Vframe_RootId = Mx_Cfg.rootId;
         e = GetById(rootId);
         if (!e) {
@@ -566,7 +572,6 @@ let Vframe_Root = (rootId?, e?) => {
             e = Doc_Body;
         }
         Vframe_RootVframe = new Vframe(e);
-        
     }
     return Vframe_RootVframe;
 };
@@ -669,59 +674,57 @@ Assign(Vframe[Prototype], {
             me['g'] = view;
             Assign(params, viewInitParams);
             sign = me['d'];
-            
-                Async_Require(view, TView => {
-                    if (sign == me['d']) { //有可能在view载入后，vframe已经卸载了
-                        if (!TView) {
-                            return Mx_Cfg.error(Error(`${id} cannot load:${view}`));
-                        }
+            Async_Require(view, TView => {
+                if (sign == me['d']) { //有可能在view载入后，vframe已经卸载了
+                    if (!TView) {
+                        return Mx_Cfg.error(Error(`${id} cannot load:${view}`));
+                    }
                         ctors = View_Prepare(TView);
-                        view = new TView(id, root, me, params, ctors);
+                    view = new TView(id, root, me, params, ctors);
 
-                        if (DEBUG) {
-                            let viewProto = TView.prototype;
-                            let importantProps = {
-                                id: 1,
-                                owner: 1,
-                                'a': 1,
-                                'b': 1,
-                                'c': 1,
-                                'd': 1,
-                                'e': 1
-                            };
-                            for (let p in view) {
-                                if (Has(view, p) && viewProto[p]) {
-                                    throw new Error(`avoid write ${p} at file ${viewPath}!`);
-                                }
+                    if (DEBUG) {
+                        let viewProto = TView.prototype;
+                        let importantProps = {
+                            id: 1,
+                            owner: 1,
+                            'a': 1,
+                            'b': 1,
+                            'c': 1,
+                            'd': 1,
+                            'e': 1
+                        };
+                        for (let p in view) {
+                            if (Has(view, p) && viewProto[p]) {
+                                throw new Error(`avoid write ${p} at file ${viewPath}!`);
                             }
-                            view = Safeguard(view, true, (key, value) => {
-                                if (Has(viewProto, key) ||
-                                    (Has(importantProps, key) &&
-                                        (key != 'c' || !isFinite(value)) &&
-                                        ((key != 'owner' && key != 'root') || value !== Null))) {
-                                    throw new Error(`avoid write ${key} at file ${viewPath}!`);
-                                }
-                            });
                         }
-                        me['h'] = view;
-                        
-                        View_DelegateEvents(view);
-                        ToTry(view.init, params, view);
-                        CallFunction(ToTry, [view['f'], params, view]);
-                        CallFunction(() => {
-                            view['g']();
-                            if (!view.tmpl) { //无模板
-                                //me['e'] = 0; //不会修改节点，因此销毁时不还原
-                                //me['f'] = Empty;
-                                if (!view['h']) {
-                                    View_EndUpdate(view);
-                                }
+                        view = Safeguard(view, true, (key, value) => {
+                            if (Has(viewProto, key) ||
+                                (Has(importantProps, key) &&
+                                    (key != 'c' || !isFinite(value)) &&
+                                    ((key != 'owner' && key != 'root') || value !== Null))) {
+                                throw new Error(`avoid write ${key} at file ${viewPath}!`);
                             }
                         });
-                        // view['g']();
                     }
-                });
-                
+                    me['h'] = view;
+                    
+                    View_DelegateEvents(view);
+                    ToTry(view.init, params, view);
+                    SafeCallFunction(view['f'], params, view);
+                    CallFunction(() => {
+                        view['g']();
+                        if (!view.tmpl) { //无模板
+                            //me['e'] = 0; //不会修改节点，因此销毁时不还原
+                            //me['f'] = Empty;
+                            if (!view['h']) {
+                                View_EndUpdate(view);
+                            }
+                        }
+                    });
+                    // view['g']();
+                }
+            });
         }
     },
     /**
@@ -1700,8 +1703,7 @@ let View_DelegateEvents = (me, destroy) => {
 };
 let View_Globals = {
     win: Doc_Window,
-    doc: Doc_Document,
-    body: Doc_Body
+    doc: Doc_Document
 };
 
 let View_MergeMixins = (mixins, proto, ctors) => {
@@ -1930,6 +1932,12 @@ Assign(View[Prototype], MxEvent, {
         me['k'] = changed;
         return me;
     },
+    changed() {
+        if (DEBUG) {
+            return Boolean(this['@{k}']);
+        }
+        return this['@{k}'];
+    },
     digest(data, unchanged) {
         let me = this.set(data, unchanged);
         /*
@@ -2039,9 +2047,7 @@ let Magix = {
     mark: Mark,
     unmark: Unmark,
     node: GetById,
-    task(fn, args, context, id) {
-        CallFunction(ToTry, [fn, args, context], Null, id);
-    }
+    task: SafeCallFunction
 };
  export  declare namespace Magix5 {
     /**
@@ -2705,6 +2711,10 @@ let Magix = {
          */
         set(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, ): this
         /**
+         * 获取设置数据后，是否发生了改变
+         */
+        changed(): boolean
+        /**
          * 检测数据变化，更新界面，放入数据后需要显式调用该方法才可以把数据更新到界面
          * @param data 数据对象，如{a:20,b:30}
          * @param unchanged 指示哪些数据并没有变化的对象
@@ -3001,7 +3011,7 @@ let Magix = {
          * @param context this指向
          * @param id 任务id,当指定id且同样id有多个时,会取消前面的执行
          */
-        task<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext,id?:string): void
+        task<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext, id?: string): void
 
         
 

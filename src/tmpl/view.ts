@@ -61,8 +61,7 @@ let View_DelegateEvents = (me, destroy) => {
 };
 let View_Globals = {
     win: Doc_Window,
-    doc: Doc_Document,
-    body: Doc_Body
+    doc: Doc_Document
 };
 /*#if(modules.mixins){#*/
 let View_MergeMixins = (mixins, proto, ctors) => {

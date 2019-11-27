@@ -1,9 +1,6 @@
 let Vframe_RootVframe;
 let Vframe_Vframes = {};
 let Vframe_RootId;
-/*#if(modules.review){#*/
-let Vframe_Review;
-/*#}#*/
 let Vframe_TranslateQuery = (pId, src, params, pVf?) => {
     if (src.includes(Spliter) &&
         (pVf = Vframe_Vframes[pId])) {
@@ -12,6 +9,7 @@ let Vframe_TranslateQuery = (pId, src, params, pVf?) => {
 };
 let Vframe_Root = (rootId?, e?) => {
     if (!Vframe_RootVframe) {
+        Doc_Body = Doc_Document.body;
         rootId = Vframe_RootId = Mx_Cfg.rootId;
         e = GetById(rootId);
         if (!e) {
@@ -21,9 +19,6 @@ let Vframe_Root = (rootId?, e?) => {
             e = Doc_Body;
         }
         Vframe_RootVframe = new Vframe(e);
-        /*#if(modules.review){#*/
-        Vframe_Review = Mx_Cfg.review;
-        /*#}#*/
     }
     return Vframe_RootVframe;
 };
@@ -126,65 +121,59 @@ Assign(Vframe[Prototype], {
             me['@{~vframe#view.path}'] = view;
             Assign(params, viewInitParams);
             sign = me['@{~vframe#sign}'];
-            /*#if(modules.review){#*/
-            Vframe_Review(view, params, view => {
-                /*#}#*/
-                Async_Require(view, TView => {
-                    if (sign == me['@{~vframe#sign}']) { //有可能在view载入后，vframe已经卸载了
-                        if (!TView) {
-                            return Mx_Cfg.error(Error(`${id} cannot load:${view}`));
-                        }
+            Async_Require(view, TView => {
+                if (sign == me['@{~vframe#sign}']) { //有可能在view载入后，vframe已经卸载了
+                    if (!TView) {
+                        return Mx_Cfg.error(Error(`${id} cannot load:${view}`));
+                    }
                         /*#if(modules.mixins){#*/ctors =/*#}#*/ View_Prepare(TView);
-                        view = new TView(id, root, me, params/*#if(modules.mixins){#*/, ctors/*#}#*/);
+                    view = new TView(id, root, me, params/*#if(modules.mixins){#*/, ctors/*#}#*/);
 
-                        if (DEBUG) {
-                            let viewProto = TView.prototype;
-                            let importantProps = {
-                                id: 1,
-                                owner: 1,
-                                '@{~view#observe.router}': 1,
-                                '@{~view#resource}': 1,
-                                '@{~view#sign}': 1,
-                                '@{~view#updater.data}': 1,
-                                '@{~view#updater.digesting.list}': 1
-                            };
-                            for (let p in view) {
-                                if (Has(view, p) && viewProto[p]) {
-                                    throw new Error(`avoid write ${p} at file ${viewPath}!`);
-                                }
+                    if (DEBUG) {
+                        let viewProto = TView.prototype;
+                        let importantProps = {
+                            id: 1,
+                            owner: 1,
+                            '@{~view#observe.router}': 1,
+                            '@{~view#resource}': 1,
+                            '@{~view#sign}': 1,
+                            '@{~view#updater.data}': 1,
+                            '@{~view#updater.digesting.list}': 1
+                        };
+                        for (let p in view) {
+                            if (Has(view, p) && viewProto[p]) {
+                                throw new Error(`avoid write ${p} at file ${viewPath}!`);
                             }
-                            view = Safeguard(view, true, (key, value) => {
-                                if (Has(viewProto, key) ||
-                                    (Has(importantProps, key) &&
-                                        (key != '@{~view#sign}' || !isFinite(value)) &&
-                                        ((key != 'owner' && key != 'root') || value !== Null))) {
-                                    throw new Error(`avoid write ${key} at file ${viewPath}!`);
-                                }
-                            });
                         }
-                        me['@{~vframe#view.entity}'] = view;
-                        /*#if(modules.router){#*/
-                        me['@{~vframe#update.tag}'] = Dispatcher_UpdateTag;
-                        /*#}#*/
-                        View_DelegateEvents(view);
-                        ToTry(view.init, params, view);
-                        SafeCallFunction(view['@{~view#assign.fn}'], params, view);
-                        CallFunction(() => {
-                            view['@{~view#render.short}']();
-                            if (!view.tmpl) { //无模板
-                                //me['@{~vframe#alter.node}'] = 0; //不会修改节点，因此销毁时不还原
-                                //me['@{~vframe#template}'] = Empty;
-                                if (!view['@{~view#rendered}']) {
-                                    View_EndUpdate(view);
-                                }
+                        view = Safeguard(view, true, (key, value) => {
+                            if (Has(viewProto, key) ||
+                                (Has(importantProps, key) &&
+                                    (key != '@{~view#sign}' || !isFinite(value)) &&
+                                    ((key != 'owner' && key != 'root') || value !== Null))) {
+                                throw new Error(`avoid write ${key} at file ${viewPath}!`);
                             }
                         });
-                        // view['@{~view#render.short}']();
                     }
-                });
-                /*#if(modules.review){#*/
+                    me['@{~vframe#view.entity}'] = view;
+                    /*#if(modules.router){#*/
+                    me['@{~vframe#update.tag}'] = Dispatcher_UpdateTag;
+                    /*#}#*/
+                    View_DelegateEvents(view);
+                    ToTry(view.init, params, view);
+                    SafeCallFunction(view['@{~view#assign.fn}'], params, view);
+                    CallFunction(() => {
+                        view['@{~view#render.short}']();
+                        if (!view.tmpl) { //无模板
+                            //me['@{~vframe#alter.node}'] = 0; //不会修改节点，因此销毁时不还原
+                            //me['@{~vframe#template}'] = Empty;
+                            if (!view['@{~view#rendered}']) {
+                                View_EndUpdate(view);
+                            }
+                        }
+                    });
+                    // view['@{~view#render.short}']();
+                }
             });
-            /*#}#*/
         }
     },
     /**

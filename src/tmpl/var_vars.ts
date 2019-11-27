@@ -23,7 +23,8 @@ function Noop() { }
 /*#if(modules.richView||modules.service){#*/
 let JSON_Stringify = JSON.stringify;
 /*#}#*/
-let Doc_Body = Doc_Document.body;
+let Header = Doc_Document.head;
+let Doc_Body;
 let Pfm = Doc_Window.performance;
 let Date_Now = Pfm.now.bind(Pfm);
 /*
@@ -87,8 +88,7 @@ let {
     /*#}#*/
     hasOwnProperty: HasProp
 } = Object;
-let Header = Doc_Document.head;
-let GA = Doc_Body.getAttribute;
+let GA = Header.getAttribute;
 let GetAttribute = (node, attr) => GA.call(node, attr);
 let ApplyStyle = (key, css, node) => {
     if (DEBUG && IsArray(key)) {

@@ -1,7 +1,7 @@
 /*
 version:5.0.1 Licensed MIT
 author:kooboy_li@163.com
-loader:cmd
+loader:umd
 enables:rich,mixins,mxevent,richVframe,xml
 optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,recast,require,customTags,checkAttr,webc,service,state,seajs
 */
@@ -9,7 +9,12 @@ optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,reca
 //#exclude = all;
 if (typeof DEBUG == 'undefined')
     window.DEBUG = true;
-define('magix5', () => {
+(factory => {
+    if (window.define) {
+        define('magix5', factory);
+    }
+    window.Magix = factory();
+})(() => {
     //VARS
     let Counter = 0;
     let Empty = '';
@@ -26,7 +31,8 @@ define('magix5', () => {
     let Tag_Prop_Id = 'id';
     let Hash_Key = '#';
     function Noop() { }
-    let Doc_Body = Doc_Document.body;
+    let Header = Doc_Document.head;
+    let Doc_Body;
     let Pfm = Doc_Window.performance;
     let Date_Now = Pfm.now.bind(Pfm);
     /*
@@ -81,8 +87,7 @@ define('magix5', () => {
         me[Spliter + 'a'] = 1;
     };
     let { assign: Assign, keys: Keys, hasOwnProperty: HasProp } = Object;
-    let Header = Doc_Document.head;
-    let GA = Doc_Body.getAttribute;
+    let GA = Header.getAttribute;
     let GetAttribute = (node, attr) => GA.call(node, attr);
     let ApplyStyle = (key, css, node) => {
         if (DEBUG && IsArray(key)) {
@@ -340,8 +345,10 @@ define('magix5', () => {
         while (CallBreakTime) {
             next = CallList[CallIndex - 1];
             if (next) {
-                //ToTry(next, CallList[CallIndex + 1], CallList[CallIndex]);
-                next.apply(CallList[CallIndex], CallList[CallIndex + 1]);
+                if (next !== Null) {
+                    //ToTry(next, CallList[CallIndex + 1], CallList[CallIndex]);
+                    next.apply(CallList[CallIndex], CallList[CallIndex + 1]);
+                }
                 CallIndex += 4;
                 if (Date_Now() - last > CallBreakTime &&
                     CallList.length > CallIndex) {
@@ -364,24 +371,46 @@ define('magix5', () => {
         if (id) {
             for (let i = CallIndex; i < CallList.length; i += 4) {
                 if (CallList[i + 2] == id) {
-                    CallList[i - 1] = Noop;
+                    CallList[i - 1] = Null;
                     console.log('ignore id', id);
                 }
             }
         }
         CallList.push(fn, context, args, id);
     };
+    let SafeCallFunction = (fn, args, context, id) => {
+        CallFunction(ToTry, [fn, args, context], Null, id);
+    };
+    let globalView = GUID();
+    Mx_Cfg.defaultView = globalView;
+    let globalViewEntity;
+    let dynamicAddViews = {};
     let Async_Require = (name, fn, a, n) => {
         if (name) {
             a = [];
-            if (!IsArray(name))
-                name = [name];
-            for (n of name) {
-                n = require(n);
-                a.push(n && n.__esModule && n.default || n);
+            if (name == globalView) {
+                if (!globalViewEntity) {
+                    globalViewEntity = View.extend();
+                }
+                a.push(globalViewEntity);
+                if (fn)
+                    CallFunction(fn, a);
             }
-            if (fn)
-                CallFunction(fn, a);
+            else if (dynamicAddViews[name]) {
+                a.push(dynamicAddViews[name]);
+                if (fn)
+                    CallFunction(fn, a);
+            }
+            else {
+                if (!IsArray(name))
+                    name = [name];
+                for (n of name) {
+                    n = require(n);
+                    a.push(n && n.__esModule && n.default || n);
+                }
+                if (fn)
+                    CallFunction(fn, a);
+            }
         }
         else {
             fn();
@@ -522,6 +551,7 @@ define('magix5', () => {
     };
     let Vframe_Root = (rootId, e) => {
         if (!Vframe_RootVframe) {
+            Doc_Body = Doc_Document.body;
             rootId = Vframe_RootId = Mx_Cfg.rootId;
             e = GetById(rootId);
             if (!e) {
@@ -657,7 +687,7 @@ define('magix5', () => {
                         me['h'] = view;
                         View_DelegateEvents(view);
                         ToTry(view.init, params, view);
-                        CallFunction(ToTry, [view['f'], params, view]);
+                        SafeCallFunction(view['f'], params, view);
                         CallFunction(() => {
                             view['g']();
                             if (!view.tmpl) { //无模板
@@ -1561,8 +1591,7 @@ define('magix5', () => {
     };
     let View_Globals = {
         win: Doc_Window,
-        doc: Doc_Document,
-        body: Doc_Body
+        doc: Doc_Document
     };
     let View_MergeMixins = (mixins, proto, ctors) => {
         let temp = {}, p, node, fn, exist;
@@ -1764,6 +1793,12 @@ define('magix5', () => {
             me['k'] = changed;
             return me;
         },
+        changed() {
+            if (DEBUG) {
+                return Boolean(this['@{k}']);
+            }
+            return this['@{k}'];
+        },
         digest(data, unchanged) {
             let me = this.set(data, unchanged);
             /*
@@ -1863,10 +1898,11 @@ define('magix5', () => {
         mark: Mark,
         unmark: Unmark,
         node: GetById,
-        task(fn, args, context, id) {
-            CallFunction(ToTry, [fn, args, context], Null, id);
-        }
+        task: SafeCallFunction
     };
     Magix.default = Magix;
+    Magix.addView = (path, view) => {
+        dynamicAddViews[path] = view.__esModule && view.default || view;
+    };
     return Magix;
 });
