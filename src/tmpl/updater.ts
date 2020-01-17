@@ -99,14 +99,11 @@ let Updater_Digest = (view /*#if(modules.async){#*/, fire/*#}#*/, tmpl) => {
                 */
                 tmpl = ref['@{~updater-ref#changed}'] || !view['@{~view#rendered}'];
                 for (vdom of ref['@{~updater-ref#view.renders}']) {
-                    /*#if(modules.async){#*/
-                    CallFunction(vdom['@{~view#render.short}'], Empty_Array, vdom);
-                    /*#}else{#*/
-                    CallFunction(View_CheckAssign, [vdom]);
-                    /*#}#*/
+                    CallFunction(vdom['@{~view#render.short}'], Empty_Array, vdom, Spliter + vdom.id);
+                    //CallFunction(View_CheckAssign, [vdom]);
                 }
                 if (tmpl) {
-                    CallFunction(View_EndUpdate, [view]);
+                    View_EndUpdate(view);
                 }
                 /*#if(modules.mxevent){#*/
                 view.fire('domready');

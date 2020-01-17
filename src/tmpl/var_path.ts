@@ -37,7 +37,7 @@ let ToUri = (path, params, keo) => {
     let arr = [], v, p, f;
     for (p in params) {
         v = params[p] + Empty;
-        if (!keo || v || Has(keo, p)) {
+        if (v || Has(keo, p)) {
             v = Encode(v);
             arr.push(f = p + '=' + v);
         }
@@ -61,8 +61,7 @@ let ParseExpr = (expr, data, result?) => {
     if (ParseExprCache.has(expr)) {
         result = ParseExprCache.get(expr);
     } else {
-        //jshint evil:true
-        result = ToTry(Function(`return ${expr}`));
+        result = ToObject(expr);
         if (expr.includes(Spliter)) {
             TranslateData(data, result);
             if (DEBUG) {

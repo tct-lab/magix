@@ -888,19 +888,19 @@
         toMap<T extends object>(list: any[], key?: string): T
         /**
          * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
-         * @param fns 函数数组
+         * @param fn 函数
          * @param args 参数数组
          * @param context 在待执行的方法内部，this的指向
          */
-        toTry<TReturnType, TContextType>(fns: ((this: TContextType, ...args: any[]) => void) | ((this: TContextType, ...args: any[]) => void)[], args?: any[], context?: TContextType): TReturnType
+        toTry<TReturnType, TContextType>(fn: ((this: TContextType, ...args: any[]) => void), args?: any[], context?: TContextType): TReturnType
 
         /**
          * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
-         * @param fns 函数数组
+         * @param fn 函数数组
          * @param args 参数数组
          * @param context 在待执行的方法内部，this的指向
          */
-        toTry<TReturnType>(fns: Function | Function[], args?: any[], context?: any): TReturnType
+        toTry<TReturnType>(fn: Function, args?: any[], context?: any): TReturnType
 
         /**
          * 转换成字符串路径。Magix.toUrl('/xxx/',{a:'b',c:'d'}) => /xxx/?a=b&c=d

@@ -89,5 +89,5 @@ let Magix = {
     mark: Mark,
     unmark: Unmark,
     node: GetById,
-    task: SafeCallFunction
+    task: CallFunction
 };

@@ -27,6 +27,7 @@ let Header = Doc_Document.head;
 let Doc_Body;
 let Pfm = Doc_Window.performance;
 let Date_Now = Pfm.now.bind(Pfm);
+let ToObject = expr => ToTry(Function(`return ${expr}`));
 /*
     关于spliter
     出于安全考虑，使用不可见字符\u0000，然而，window手机上ie11有这样的一个问题：'\u0000'+"abc",结果却是一个空字符串，好奇特。
@@ -65,10 +66,10 @@ let NodeIn = (a, b, r?) => {
     }
     return r;
 };
-let Mark = (me, key, host?, m?, k?) => {
-    k = Spliter + '@{~mark#object.deleted}';
-    if (!me[k]) {
-        k = Spliter + '@{~mark#object}';
+let Mark = (me, key, host?, m?, k?, kd?) => {
+    kd = Spliter + '@{~mark#object.deleted}';
+    k = Spliter + '@{~mark#object}';
+    if (!me[kd]) {
         host = me[k] || (me[k] = {});
         if (!Has(host, key)) {
             host[key] = 0;
@@ -127,15 +128,15 @@ let ApplyStyle = (key, css, node) => {
         }
     }
 };
-let ToTry = (fns, args?, context?, r?, e?) => {
-    if (!IsArray(fns)) fns = [fns];
-    if (!IsArray(args)) args = args && [args] || Empty_Array;
-    for (e of fns) {
-        try {
-            r = e && e.apply(context, args);
-        } catch (x) {
-            Mx_Cfg.error(x);
+let ToTry = (fn, args?, context?, r?) => {
+    try {
+        if (IsArray(args)) {
+            r = fn.apply(context, args);
+        } else {
+            r = fn.call(context, args);
         }
+    } catch (x) {
+        Mx_Cfg.error(x);
     }
     return r;
 };

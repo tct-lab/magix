@@ -33,7 +33,7 @@ let Dispatcher_Update = async (vframe, view?, cs?, c?) => {
         }
         cs = vframe.children();
         for (c of cs) {
-            CallFunction(Dispatcher_Update, [Vframe_Vframes[c]]);
+            CallFunction(Dispatcher_Update, Vframe_Vframes[c]);
             //Dispatcher_Update(Vframe_Vframes[c]);
         }
     }

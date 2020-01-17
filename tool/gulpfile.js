@@ -2,8 +2,10 @@ let gulp = require('gulp');
 let fs = require('fs');
 let customize = require('./customize');
 
+let ts = require('typescript');
+
 let type = 'umd,module';
-let enableModules = 'rich,mixins,mxevent,richVframe,xml';
+let enableModules = 'rich,mixins,mxevent,richVframe,xml,router,routerHash,richView';
 
 gulp.task('combine', () => {
     type.split(',').forEach(t => {
@@ -36,3 +38,25 @@ gulp.task('combine', () => {
         });
     });
 });
+
+gulp.task('patch', () => {
+    let json = fs.readFileSync('./revisement.json').toString();
+    let revisableReg = /@\{[a-zA-Z\.0-9\-\~#]+\}/g;
+    let source = fs.readFileSync('../src/umd/patch.ts').toString();
+    let result = ts.transpileModule(source, {
+        compilerOptions: {
+            target: 'es6',
+            module: ts.ModuleKind.None
+        }
+    });
+    let content = result.outputText;
+    let rJSON = JSON.parse(json);
+    content = content.replace(revisableReg, m => {
+        return rJSON[m] || m;
+    });
+    fs.writeFileSync('../dist/umd/patch.js', content);
+});
+
+gulp.task('default', gulp.parallel('combine', 'patch', () => {
+    console.log('done');
+}));

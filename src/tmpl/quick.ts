@@ -18,7 +18,7 @@ let Q_Create = (tag, props, children, specials, unary) => {
             for (c of children) {
                 value = c['@{~v#node.outer.html}'];
                 if (c['@{~v#node.tag}'] == V_TEXT_NODE) {
-                    value = value ? Updater_Encode(value) : ' ';//无值的文本节点我们用一个空格占位，这样在innerHTML的时候才会有文本节点
+                    value = value ? Updater_Encode(value) : '\u200b';//无值的文本节点我们用一个空格占位，这样在innerHTML的时候才会有文本节点 该空白文本节点是&#8203
                 }
                 innerHTML += value;
                 //merge text node
@@ -47,7 +47,9 @@ let Q_Create = (tag, props, children, specials, unary) => {
             //布尔值
             if (value === false ||
                 value == Null) {
-                delete props[prop];
+                if (!specials[prop]) {
+                    delete props[prop];
+                }
                 continue;
             } else if (value === true) {
                 props[prop] = value = specials[prop] ? value : Empty;

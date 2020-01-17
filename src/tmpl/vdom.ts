@@ -283,7 +283,7 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys/*#if(
                         if (paramsChanged ||
                             htmlChanged /*#if(modules.checkAttr){#*/ ||
                             updateAttribute/*#}#*/) {
-                            assign = view['@{~view#rendered}'] && view['@{~view#assign.fn}'];
+                            assign = view['@{~view#assign.fn}'];
                             //如果有assign方法,且有参数或html变化
                             //if (assign) {
                             params = uri[Params];
@@ -314,13 +314,13 @@ let V_SetNode = (realNode, oldParent, lastVDOM, newVDOM, ref, vframe, keys/*#if(
                                 }
                                 if (result) {
                                     /*#if(!modules.async){#*/
-                                    view['@{~view#assign.sign}']++;
+                                    //view['@{~view#assign.sign}']++;
                                     /*#}#*/
                                     ref['@{~updater-ref#view.renders}'].push(view);
                                 }
                             } else if (ToTry(assign, params,/*[params, uri],*/ view)) {
                                 /*#if(!modules.async){#*/
-                                view['@{~view#assign.sign}']++;
+                                //view['@{~view#assign.sign}']++;
                                 /*#}#*/
                                 ref['@{~updater-ref#view.renders}'].push(view);
                             }

@@ -1,10 +1,10 @@
-/*!5.0.1 Licensed MIT*/
+/*!5.0.2 Licensed MIT*/
 /*
 author:kooboy_li@163.com
 loader:umd
-enables:rich,mixins,mxevent,richVframe,xml
+enables:rich,mixins,mxevent,richVframe,xml,router,routerHash,richView
 
-optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,recast,require,customTags,checkAttr,webc,service,state,seajs
+optionals:routerState,routerTip,routerTipLockUrl,recast,require,customTags,checkAttr,webc,service,state,seajs
 */
  declare namespace Magix5 {
     /**
@@ -77,6 +77,14 @@ optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,reca
          * 以try catch执行一些用户重写的核心流程，当出错时，允许开发者通过该配置项进行捕获。注意：您不应该在该方法内再次抛出任何错误
          */
         error?: (this: void, exception: Error) => void
+        
+        /**
+         * 重写地址栏解析后的对象
+         * @param pathname 路径信息
+         * @param params 参数对象
+         */
+        rewrite?: (pathname: string, params: { [key: string]: string }) => string
+        
         
         
         /**
@@ -862,19 +870,19 @@ optionals:router,routerHash,routerState,routerTip,routerTipLockUrl,richView,reca
         toMap<T extends object>(list: any[], key?: string): T
         /**
          * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
-         * @param fns 函数数组
+         * @param fn 函数
          * @param args 参数数组
          * @param context 在待执行的方法内部，this的指向
          */
-        toTry<TReturnType, TContextType>(fns: ((this: TContextType, ...args: any[]) => void) | ((this: TContextType, ...args: any[]) => void)[], args?: any[], context?: TContextType): TReturnType
+        toTry<TReturnType, TContextType>(fn: ((this: TContextType, ...args: any[]) => void), args?: any[], context?: TContextType): TReturnType
 
         /**
          * 以try catch方式执行方法，忽略掉任何异常。返回成功执行的最后一个方法的返回值
-         * @param fns 函数数组
+         * @param fn 函数数组
          * @param args 参数数组
          * @param context 在待执行的方法内部，this的指向
          */
-        toTry<TReturnType>(fns: Function | Function[], args?: any[], context?: any): TReturnType
+        toTry<TReturnType>(fn: Function, args?: any[], context?: any): TReturnType
 
         /**
          * 转换成字符串路径。Magix.toUrl('/xxx/',{a:'b',c:'d'}) => /xxx/?a=b&c=d

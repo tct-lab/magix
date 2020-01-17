@@ -1,4 +1,4 @@
-//like 'login<click>' or '$<click>' or '$win<scroll>' or '$win<scroll>&passive,capture'
+//like 'login<click>' or '$<click>' or '$win<scroll>' or '$win<scroll>&{capture:true}'
 let View_EvtMethodReg = /^(\$?)([^<]*)<([^>]+)>(?:&(.+))?$/;
 /*#if(modules.router&&modules.routerTip){#*/
 let View_Tip_Suspend;
@@ -8,8 +8,10 @@ let processMixinsSameEvent = (exist, additional, temp?) => {
     if (exist['@{~viewmixin#list}']) {
         temp = exist;
     } else {
-        temp = function (e) {
-            ToTry(temp['@{~viewmixin#list}'], e, this);
+        temp = function (e, f) {
+            for (f of temp['@{~viewmixin#list}']) {
+                ToTry(f, e, this);
+            }
         };
         temp['@{~viewmixin#list}'] = [exist];
         temp['@{~viewmixin#is.mixin}'] = 1;
@@ -19,14 +21,14 @@ let processMixinsSameEvent = (exist, additional, temp?) => {
 };
 /*#}#*/
 /*#if(!modules.async){#*/
-let View_CheckAssign = view => {
-    if (view['@{~view#assign.sign}']) {
-        view['@{~view#assign.sign}']--;
-    }
-    if (view['@{~view#sign}'] && !view['@{~view#assign.sign}']) { //signature
-        ToTry(view['@{~view#render.short}'], Empty_Array, view);
-    }
-};
+// let View_CheckAssign = view => {
+//     if (view['@{~view#assign.sign}']) {
+//         view['@{~view#assign.sign}']--;
+//     }
+//     if (view['@{~view#sign}'] && !view['@{~view#assign.sign}']) { //signature
+//         ToTry(view['@{~view#render.short}'], Empty_Array, view);
+//     }
+// };
 /*#}#*/
 let View_EndUpdate = view => {
     /*#if(modules.richVframe){#*/let o, f;/*#}#*/
@@ -39,7 +41,7 @@ let View_EndUpdate = view => {
         o = view.owner;
         o.mountZone();
         if (!f) {
-            Timeout(Vframe_RunInvokes, 0, o);
+            CallFunction(Vframe_RunInvokes, o);
         }
         /*#}else{#*/
         view.owner.mountZone();
@@ -90,6 +92,8 @@ let View_MergeMixins = (mixins, proto, ctors) => {
     for (p in temp) {
         if (!Has(proto, p)) {
             proto[p] = temp[p];
+        } else if (DEBUG) {
+            console.error('already exist ' + p + ',avoid override it!');
         }
     }
 };
@@ -99,6 +103,7 @@ function merge(...args) {
     return me;
 }
 /*#}#*/
+let safeRender = render => function (...args) { ToTry(render, args, this) };
 function extend(props, statics) {
     let me = this;
     props = props || {};
@@ -114,10 +119,14 @@ function extend(props, statics) {
 
         /*#if(modules.mixins){#*/
         cs = NView['@{~view-factory#ctors}'];
-        if (cs) ToTry(cs, initParams, z);
+        if (cs) {
+            for (ctor of cs) {
+                ToTry(ctor, initParams, z);
+            }
+        }
         concatCtors = ctors.concat(mixinCtors);
-        if (concatCtors.length) {
-            ToTry(concatCtors, initParams, z);
+        for (ctor of concatCtors) {
+            ToTry(ctor, initParams, z);
         }
         /*#}else{#*/
         if (ctor) ToTry(ctor, initParams, z);
@@ -152,13 +161,7 @@ let View_Prepare = oView => {
             matches = p.match(View_EvtMethodReg);
             if (matches) {
                 [, isSelector, selectorOrCallback, events, modifiers] = matches;
-                mod = {};
-                if (modifiers) {
-                    modifiers = modifiers.split(Comma);
-                    for (item of modifiers) {
-                        mod[item] = true;
-                    }
-                }
+                mod = modifiers ? ToObject(modifiers) : {};
                 events = events.split(Comma);
                 for (item of events) {
                     node = View_Globals[selectorOrCallback];
@@ -201,7 +204,7 @@ let View_Prepare = oView => {
                 }
             }
         }
-        prop['@{~view#render.short}'] = prop.render;
+        prop['@{~view#render.short}'] = prop.render = safeRender(prop.render);
         prop['@{~view#events.object}'] = eventsObject;
         prop['@{~view#events.list}'] = eventsList;
         prop['@{~view#selector.events.object}'] = selectorObject;
@@ -246,7 +249,11 @@ function View(id, root, owner/*#if(modules.mixins){#*/, ops/*#}#*/, me) {
     /*#}#*/
     /*#if(modules.mixins){#*/
     id = View['@{~view-factory#ctors}'];
-    if (id) ToTry(id, ops, me);
+    if (id) {
+        for (owner of id) {
+            ToTry(owner, ops, me);
+        }
+    }
     /*#}#*/
 }
 Assign(View, {
@@ -352,9 +359,9 @@ Assign(View[Prototype], /*#if(modules.mxevent){#*/MxEvent,/*#}#*/ {
     },
     changed() {
         if (DEBUG) {
-            return Boolean(this['@{@{~view#updater.data.changed}}']);
+            return Boolean(this['@{~view#updater.data.changed}']);
         }
-        return this['@{@{~view#updater.data.changed}}'];
+        return this['@{~view#updater.data.changed}'];
     },
     digest(data, unchanged) {
         let me = this.set(data, unchanged);

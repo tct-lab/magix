@@ -14,7 +14,7 @@ let Vframe_Root = (rootId?, e?) => {
         e = GetById(rootId);
         if (!e) {
             if (DEBUG) {
-                console.error('can not find element:"' + rootId + '",use document.body as default');
+                console.warn('can not find element:"' + rootId + '",use document.body as default');
             }
             e = Doc_Body;
         }
@@ -134,6 +134,7 @@ Assign(Vframe[Prototype], {
                         let importantProps = {
                             id: 1,
                             owner: 1,
+                            root: 1,
                             '@{~view#observe.router}': 1,
                             '@{~view#resource}': 1,
                             '@{~view#sign}': 1,
@@ -160,7 +161,7 @@ Assign(Vframe[Prototype], {
                     /*#}#*/
                     View_DelegateEvents(view);
                     ToTry(view.init, params, view);
-                    SafeCallFunction(view['@{~view#assign.fn}'], params, view);
+                    CallFunction(view['@{~view#assign.fn}'], params, view);
                     CallFunction(() => {
                         view['@{~view#render.short}']();
                         if (!view.tmpl) { //无模板
@@ -184,19 +185,19 @@ Assign(Vframe[Prototype], {
         let { '@{~vframe#view.entity}': v, root } = me;
         me['@{~vframe#invoke.list}'] = [];
         if (v) {
-            me.unmountZone();
             me['@{~vframe#view.entity}'] = 0; //unmountView时，尽可能早的删除vframe上的$v对象，防止$v销毁时，再调用该 vfrmae的类似unmountZone方法引起的多次created
             if (v['@{~view#sign}']) {
-                Unmark(v);
                 v['@{~view#sign}'] = 0;
+                Unmark(v);
+                me.unmountZone();
                 /*#if(modules.mxevent){#*/
                 v.fire('destroy');
                 /*#}#*/
                 View_DelegateEvents(v, 1);
-                v.owner = v.root = Null;
-            }
-            if (root && me['@{~vframe#alter.node}'] /*&&!keepPreHTML*/) { //如果$v本身是没有模板的，也需要把节点恢复到之前的状态上：只有保留模板且$v有模板的情况下，这条if才不执行，否则均需要恢复节点的html，即$v安装前什么样，销毁后把节点恢复到安装前的情况
-                SetInnerHTML(root, me['@{~vframe#template}']);
+                //v.owner = v.root = Null;
+                if (root && me['@{~vframe#alter.node}'] /*&&!keepPreHTML*/) { //如果$v本身是没有模板的，也需要把节点恢复到之前的状态上：只有保留模板且$v有模板的情况下，这条if才不执行，否则均需要恢复节点的html，即$v安装前什么样，销毁后把节点恢复到安装前的情况
+                    SetInnerHTML(root, me['@{~vframe#template}']);
+                }
             }
         }
         me['@{~vframe#sign}']++; //增加signature，阻止相应的回调，见mountView

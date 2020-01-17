@@ -99,7 +99,9 @@ let Service_Cache_Done = (bagCacheKeys, cacheKey, fns?) => error => {
     fns = bagCacheKeys[cacheKey];
     if (fns) {
         delete bagCacheKeys[cacheKey]; //先删除掉信息
-        ToTry(fns, error, fns['@{~service-cache-list#entity}']); //执行所有的回调
+        for (let fn of fns) {
+            ToTry(fn, error, fns['@{~service-cache-list#entity}']); //执行所有的回调
+        }
     }
 };
 // function Service_CacheDone(cacheKey, err, fns) {
