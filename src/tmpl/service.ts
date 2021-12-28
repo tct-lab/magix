@@ -86,11 +86,8 @@ Assign(Bag[Prototype], {
         }
         return attrs;
     },
-    set(key, val) {
-        if (!IsObject(key)) {
-            key = { [key]: val };
-        }
-        Assign(this['@{~bag#attrs}'], key);
+    set(data) {
+        Assign(this['@{~bag#attrs}'], data);
     }
 });
 let Service_FetchFlags_ONE = 1;
@@ -353,6 +350,7 @@ Service.extend = (sync, cacheMax, cacheBuffer) => {
     NService['@{~service#cache}'] = new MxCache(cacheMax, cacheBuffer);
     NService['@{~service#request.keys}'] = {};
     NService['@{~service#metas}'] = {};
-    return Extend(NService, Service, Null, Service_Manager);
+    Assign(NService, Service_Manager);
+    return Extend(NService, Service);
 };
 /*#}#*/

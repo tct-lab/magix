@@ -1,3 +1,19 @@
+let ToObjectCache = new MxCache();
+let ToObject = (expr, cache = 1, result?) => {
+    if (cache &&
+        ToObjectCache.has(expr)) {
+        result = ToObjectCache.get(expr);
+    } else {
+        result = ToTry(Function(`return ${expr}`));
+        if (cache) {
+            if (DEBUG) {
+                result = Safeguard(result);
+            }
+            ToObjectCache.set(expr, result);
+        }
+    }
+    return result;
+};
 let Decode = decodeURIComponent;
 let PathToObject = new MxCache();
 let ParseUri = path => {
@@ -7,19 +23,23 @@ let ParseUri = path => {
     //5. /xxx/index.html  => path /xxx/index.html
     //11. ab?a&b          => path ab  params:{a:'',b:''}
     let r = PathToObject.get(path),
-        pathname, key, value, po, q;
+        pathname, key, value, po, q,
+        rest;
     if (!r) {
         po = {};
         q = path.indexOf('?');
         if (q == -1) {
             pathname = path;
+            rest = Empty;
         } else {
             pathname = path.substring(0, q);
-            path = path.substring(q + 1);
-            if (path) {
-                for (q of path.split('&')) {
-                    [key, value] = q.split('=');
-                    po[Decode(key)] = Decode(value || Empty);
+            rest = path.substring(q + 1);
+        }
+        if (rest) {
+            for (q of rest.split('&')) {
+                if (q) {
+                    [key, value = Empty] = q.split('=');
+                    po[Decode(key)] = isRString(value) ? value : Decode(value);
                 }
             }
         }
@@ -61,7 +81,7 @@ let ParseExpr = (expr, data, result?) => {
     if (ParseExprCache.has(expr)) {
         result = ParseExprCache.get(expr);
     } else {
-        result = ToObject(expr);
+        result = ToObject(expr, 0);
         if (expr.includes(Spliter)) {
             TranslateData(data, result);
             if (DEBUG) {

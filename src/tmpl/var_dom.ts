@@ -9,7 +9,9 @@ let DispatchEvent = (element, type, data) => {
     element.dispatchEvent(e);
 };
 let AttachEventHandlers = [];
-let AddEventListener = (element, type, fn, viewId?, eventOptions?, view?) => {
+let EventListen = (element, ...args) => element.addEventListener(...args);
+let EventUnlisten = (element, ...args) => element.removeEventListener(...args);
+let AddEventListener = (element, type, fn, eventOptions?, viewId?, view?) => {
     let h = {
         '@{~dom#view.id}': viewId,
         '@{~dom#real.fn}': fn,
@@ -24,17 +26,17 @@ let AddEventListener = (element, type, fn, viewId?, eventOptions?, view?) => {
         }
     };
     AttachEventHandlers.push(h);
-    element.addEventListener(type, h['@{~dom#event.proxy}'], eventOptions);
+    EventListen(element, type, h['@{~dom#event.proxy}'], eventOptions);
 };
-let RemoveEventListener = (element, type, cb, viewId?, eventOptions?) => {
+let RemoveEventListener = (element, type, cb, eventOptions?, viewId?) => {
     for (let c, i = AttachEventHandlers.length; i--;) {
         c = AttachEventHandlers[i];
         if (c['@{~dom#type}'] == type &&
             c['@{~dom#view.id}'] == viewId &&
             c['@{~dom#element}'] == element &&
-            c['@{~dom#real.fn}'] === cb) {
+            c['@{~dom#real.fn}'] == cb) {
             AttachEventHandlers.splice(i, 1);
-            element.removeEventListener(type, c['@{~dom#event.proxy}'], eventOptions);
+            EventUnlisten(element, type, c['@{~dom#event.proxy}'], eventOptions);
             break;
         }
     }

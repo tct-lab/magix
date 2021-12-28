@@ -1,24 +1,39 @@
 let Q_TEXTAREA = 'textarea';
-let Q_Empty_Object = {};
-let Q_Create = (tag, props, children, specials, unary) => {
+let Q_Create = (tag, props, children, specials) => {
     //html=tag+to_array(attrs)+children.html
     let token;
     if (tag) {
-        props = props || Q_Empty_Object;
+        props = props || Empty_Object;
         let compareKey = Empty,
-            hasMxv = specials,
+            unary = children == 1,
+            mxvKeys = specials,
+            hasSpecials = specials,
             prop, value, c,
-            reused = {},
-            outerHTML = '<' + tag,
-            attrs,
+            reused,
+            reusedTotal = 0,
+            //outerHTML = '<' + tag,
+            attrs = `<${tag}`,
             innerHTML = Empty,
-            newChildren = [],
-            prevNode;
-        if (children) {
+            newChildren,
+            prevNode,
+            /*#if(modules.preloadViews){#*/
+            viewList,
+            /*#}#*/
+            mxView = 0;
+        if (children &&
+            children != 1) {
             for (c of children) {
-                value = c['@{~v#node.outer.html}'];
-                if (c['@{~v#node.tag}'] == V_TEXT_NODE) {
-                    value = value ? Updater_Encode(value) : '\u200b';//无值的文本节点我们用一个空格占位，这样在innerHTML的时候才会有文本节点 该空白文本节点是&#8203
+                if (c['@{~v#node.attrs}']) {
+                    value = c['@{~v#node.attrs}'] + (c['@{~v#node.self.close}'] ? '/>' : `>${c['@{~v#node.html}']}</${c['@{~v#node.tag}']}>`);
+                } else {
+                    value = c['@{~v#node.html}'];
+                    if (c['@{~v#node.tag}'] == V_TEXT_NODE) {
+                        if (value) {
+                            value = Updater_Encode(value);
+                        } else {
+                            continue
+                        }
+                    }
                 }
                 innerHTML += value;
                 //merge text node
@@ -26,22 +41,29 @@ let Q_Create = (tag, props, children, specials, unary) => {
                     c['@{~v#node.tag}'] == V_TEXT_NODE &&
                     prevNode['@{~v#node.tag}'] == V_TEXT_NODE) {
                     //prevNode['@{~v#node.html}'] += c['@{~v#node.html}'];
-                    prevNode['@{~v#node.outer.html}'] += c['@{~v#node.outer.html}'];
+                    prevNode['@{~v#node.html}'] += c['@{~v#node.html}'];
                 } else {
+                    /*#if(modules.preloadViews){#*/
+                    if (c['@{~v#node.views}']) {
+                        if (!viewList) viewList = [];
+                        viewList.push(...c['@{~v#node.views}']);
+                    }
+                    /*#}#*/
                     //reused node if new node key equal old node key
                     if (c['@{~v#node.compare.key}']) {
+                        if (!reused) reused = {};
                         reused[c['@{~v#node.compare.key}']] = (reused[c['@{~v#node.compare.key}']] || 0) + 1;
+                        reusedTotal++;
                     }
                     //force diff children
-                    if (c['@{~v#node.has.mxv}']) {
-                        hasMxv = 1;
-                    }
+                    mxvKeys = mxvKeys || c['@{~v#node.mxv.keys}'];
                     prevNode = c;
+                    if (!newChildren) newChildren = [];
                     newChildren.push(c);
                 }
             }
         }
-        specials = specials || Q_Empty_Object;
+        specials = specials || Empty_Object;
         for (prop in props) {
             value = props[prop];
             //布尔值
@@ -54,23 +76,42 @@ let Q_Create = (tag, props, children, specials, unary) => {
             } else if (value === true) {
                 props[prop] = value = specials[prop] ? value : Empty;
             }
-            if (prop == Tag_Prop_Id) {//如果有id优先使用
-                compareKey = value;
-            } else if (prop == MX_View &&
-                value &&
+            if ((prop == Hash_Key ||
+                prop == Tag_Prop_Id ||
+                prop == Tag_Static_Key/*#if(modules.customTags){#*/ ||
+                prop == Tag_Prop_Is/*#}#*/) &&
                 !compareKey) {
-                //否则如果是组件,则使用组件的路径做为key
-                compareKey = ParseUri(value)[Path];
-            } else if ((prop == Tag_Static_Key/*#if(modules.customTags){#*/ || prop == Tag_Prop_Is/*#}#*/) && !compareKey) {
                 compareKey = value;
-            } else if (prop == Tag_View_Params_Key) {
-                hasMxv = 1;
+                if (prop != Tag_Prop_Id) {
+                    delete props[prop];
+                    continue;
+                }
+            } if (prop == MX_View &&
+                value) {
+                /*#if(modules.preloadViews){#*/
+                prevNode = ParseUri(value);
+                mxView = prevNode[Path];
+                if (!viewList) {
+                    viewList = [];
+                }
+                viewList.push([mxView, props[MX_OWNER], value, prevNode[Params]]);
+                /*#}else{#*/
+                mxView = ParseUri(value)[Path];
+                /*#}#*/
+                if (!compareKey) {
+                    //否则如果是组件,则使用组件的路径做为key
+                    compareKey = tag + Spliter + mxView;
+                }
             }
             if (prop == Value &&
                 tag == Q_TEXTAREA) {
                 innerHTML = value;
-            } else if (!Has(V_SKIP_PROPS, prop)) {
-                outerHTML += ` ${prop}="${value && Updater_Encode(value)}"`;
+                //attrs += value;
+            } else if (prop == Tag_View_Params_Key) {
+                mxvKeys = value;
+                delete props[prop];
+            } else {
+                attrs += ` ${prop}="${value && Updater_Encode(value)}"`;
             }
         }
         /*#if(modules.customTags){#*/
@@ -79,25 +120,30 @@ let Q_Create = (tag, props, children, specials, unary) => {
             compareKey = tag;
         }
         /*#}#*/
-        attrs = outerHTML;
-        outerHTML += unary ? '/>' : `>${innerHTML}</${tag}>`;
+        //attrs += outerHTML;
+        //outerHTML += unary ? '/>' : `>${innerHTML}</${tag}>`;
         token = {
-            '@{~v#node.outer.html}': outerHTML,
             '@{~v#node.html}': innerHTML,
             '@{~v#node.compare.key}': compareKey,
             '@{~v#node.tag}': tag,
-            '@{~v#node.has.mxv}': hasMxv,
+            '@{~v#node.is.mx.view}': mxView,
+            '@{~v#node.mxv.keys}': mxvKeys,
             '@{~v#node.attrs.specials}': specials,
+            '@{~v#node.attrs.has.specials}': hasSpecials,
             '@{~v#node.attrs}': attrs,
             '@{~v#node.attrs.map}': props,
             '@{~v#node.children}': newChildren,
             '@{~v#node.reused}': reused,
+            '@{~v#node.reused.total}': reusedTotal,
+            /*#if(modules.preloadViews){#*/
+            '@{~v#node.views}': viewList,
+            /*#}#*/
             '@{~v#node.self.close}': unary
         };
     } else {
         token = {
-            '@{~v#node.tag}': props ? Spliter : V_TEXT_NODE,
-            '@{~v#node.outer.html}': children + Empty
+            '@{~v#node.tag}': children ? Spliter : V_TEXT_NODE,
+            '@{~v#node.html}': props + Empty
         };
     }
     return token;

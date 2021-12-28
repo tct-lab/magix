@@ -27,6 +27,25 @@
         eventTarget: HTMLElement
     }
     /**
+     * html元素或事件对象
+     */
+    type HTMLElementOrEventTarget = HTMLElement | EventTarget;
+    /**
+     * 路由配置对象
+     */
+    interface RoutesConfig {
+        [key: string]: string | {
+            /**
+             * 浏览器标题
+             */
+            title: string
+            /**
+             * 加载的view
+             */
+            view: string
+        }
+    }
+    /**
      * 配置信息接口
      */
     interface Config {
@@ -41,18 +60,7 @@
         /**
          * path与view关系映射对象或方法
          */
-        routes?: {
-            [key: string]: string | {
-                /**
-                 * 浏览器标题
-                 */
-                title: string
-                /**
-                 * 加载的view
-                 */
-                view: string
-            }[]
-        }
+        routes?: RoutesConfig
         /**
          * 在routes里找不到匹配时使用的view，比如显示404
          */
@@ -74,8 +82,18 @@
          * 重写地址栏解析后的对象
          * @param pathname 路径信息
          * @param params 参数对象
+         * @param routes 路由信息
+         * @param loc 解析后的地址栏对象
          */
-        rewrite?: (pathname: string, params: { [key: string]: string }) => string
+        rewrite?: (pathname: string, params: { [key: string]: string }, routes: RoutesConfig, loc: RouterParse) => string
+        /**
+         * 重写把路径和参数转换成url的逻辑
+         * @param pathname 路径信息
+         * @param params 参数对象
+         * @param lastQuery hash前的参数对象
+         * @param loc 解析后的地址栏对象
+         */
+        rebuild?: (pathname: string, params: { [key: string]: any }, lastQuery: { [key: string]: string }, loc: RouterParse) => string
         /*#if(modules.recast){#*/
         /**
          * 路径变化渲染前拦截
@@ -84,12 +102,36 @@
         recast?: (e: RouterDiff) => void
         /*#}#*/
         /*#}#*/
+        /*#if(modules.remold){#*/
+        /**
+         * 拦截事件处理方法，返回false时中止事件的处理
+         * @param taget 当前事件dom对象
+         * @param type 事件类型
+         * @param e 事件对象
+         */
+        remold?: (target: HTMLElement, type: string, e: Event) => boolean
+        /*#}#*/
         /*#if(modules.require){#*/
         /**
          * 在异步加载模块前执行的方法
          * @param modules 模块列表
+         * @param params 其它参数
          */
-        require?: (modules: string[]) => Promise<void>
+        require?: (modules: string[], params?: any) => Promise<void>
+        /*#}#*/
+        /*#if(modules.wait){#*/
+        /**
+         * 是否有等待中的任务
+         * @param flag 1有0没有
+         */
+        retard?: (flag: number) => void
+        /*#}#*/
+        /*#if(modules.load){#*/
+        /**
+         * 是否有网络请求
+         * @param falg 1有0没有
+         */
+        request?: (flag: number) => void
         /*#}#*/
         /**
          * 其它配置项
@@ -155,12 +197,6 @@
          * 当前url对应的要渲染的根view
          */
         readonly view: string
-        /**
-         * 从params中获取参数值，当参数不存在时返回空字符串
-         * @param key key
-         * @param defaultValue 当值不存在时候返回的默认值
-         */
-        get<TDefaultValueType = string>(key: string, defaultValue?: TDefaultValueType): TDefaultValueType
 
     }
     /**
@@ -220,27 +256,9 @@
 
         /**
          * 设置数据
-         * @param key 数据key
-         * @param value 数据
-         */
-        set(key: string, value: any): void
-
-        /**
-         * 设置数据
          * @param data 包含数据的对象
          */
         set(data: object): void
-    }
-    /**
-     * Magix.State变化事件接口
-     */
-    interface StateChangedEvent extends TriggerEventDescriptor {
-        /**
-         * 包含哪些数据变化的集合对象
-         */
-        readonly keys: {
-            readonly [key: string]: 1
-        }
     }
     /*#if(modules.mxevent){#*/
     /**
@@ -251,30 +269,30 @@
          * 绑定事件
          * @param name 事件名称
          * @param fn 事件处理函数
+         * @param priority 优先级
          */
-        on(name: string, fn: (this: T, e?: TriggerEventDescriptor & E) => void): this
+        on(name: string, fn: (this: T, e?: TriggerEventDescriptor & E) => void, priority?: number): void
 
         /**
          * 解除事件绑定
          * @param name 事件名称
          * @param fn 事件处理函数
          */
-        off(name: string, fn?: (this: T, e?: TriggerEventDescriptor & E) => void): this
+        off(name: string, fn?: (this: T, e?: TriggerEventDescriptor & E) => void): void
 
         /**
          * 派发事件
          * @param name 事件名称
          * @param data 事件参数
-         * @param remove 是否移除所有的事件监听
-         * @param lastToFirst 是否倒序派发列表中的监听
+         * @returns 返回事件对象
          */
-        fire(name: string, data?: object, remove?: boolean, lastToFirst?: boolean): this
+        fire<D extends object>(name: string, data?: D): TriggerEventDescriptor & D
     }
     /*#}#*/
     /**
      * 状态接口
      */
-    interface State extends Event<Router> {
+    interface State extends Event<State> {
         /**
          * 从状态对象中获取数据
          * @param key 数据key，如果未传递则返回整个状态对象
@@ -283,9 +301,8 @@
         /**
          * 设置数据
          * @param data 数据对象
-         * @param unchanged 指示哪些数据并没有变化的对象
          */
-        set(data: object, unchanged?: { [key: string]: any }): this
+        set(data: object): this
     }
     /**
      * api注册信息接口
@@ -302,11 +319,7 @@
         /**
          * 添加的接口元信息名称，需要确保在一个Service中唯一
          */
-        name: string
-        /**
-         * 逗号分割的字符串，用来清除其它接口的缓存，如该接口是一个添加新数据的接口，这个接口调用成功后，应该把所有获取相关数据的缓存接口给清理掉，否则将获取不到新数据
-         */
-        cleans?: string | string[]
+        name?: string
         /**
          * 接口在请求发送前调用，可以在该方法内对数据进行加工处理
          */
@@ -346,7 +359,7 @@
         /**
          * 阻止url改变
          */
-        prevent: () => void
+        stop: () => void
     }
     /**
      * view监听location接口
@@ -387,6 +400,7 @@
         /**
          * 导航到新的地址
          * @param params 参数对象
+         * @param empty 如果params为对象，则该参数为占位使用，可传任意空值，如null等
          * @param replace 是否替换当前的历史记录
          * @param silent 是否是静默更新，不触发change事件
          */
@@ -419,11 +433,6 @@
     interface ExtendPropertyDescriptor<T> {
         [key: string]: string | number | undefined | boolean | RegExp | symbol | object | null | ((this: T, ...args: any[]) => any)
     }
-
-    /**
-     * 继承方法中的this指向
-     */
-    type TExtendPropertyDescriptor<T> = ExtendPropertyDescriptor<T> & ThisType<T>;
     /**
      * 继承静态属性
      */
@@ -467,12 +476,6 @@
          * @param key 缓存的资源key
          */
         has(key: string): boolean
-        /**
-         * 遍历缓存对象中的所有资源
-         * @param callback 回调
-         * @param options 回调时传递的额外对象
-         */
-        each<TResourceType = any, TOptionsType = any>(callback: (resource: TResourceType, options: TOptionsType, cache: this) => void, options?: TOptionsType): void
     }
     /**
      * 缓存类
@@ -484,7 +487,7 @@
          * @param buffer 缓存区个数，默认5
          * @param removedCallback 当缓存的资源被删除时调用
          */
-        new(max?: number, buffer?: number, removedCallback?: (this: void, resource: any) => void): Cache
+        new(max?: number, buffer?: number): Cache
         readonly prototype: Cache
     }
 
@@ -493,7 +496,7 @@
     /**
      * Vframe类原型
      */
-    interface Vframe extends Event<Vframe> {
+    interface Vframe {
         /**
          * 当前vframe的唯一id
          */
@@ -516,57 +519,84 @@
          * @param viewPath view模块路径，如app/views/default
          * @param viewInitParams 初始化view时传递的参数，可以在view的init方法中接收
          */
-        mountView(viewPath: string, viewInitParams?: object): void
+        //mountView(viewPath: string, viewInitParams?: object): void
         /**
          * 销毁view
          */
-        unmountView(): void
+        //unmountView(): void
 
         /**
          * 在某个dom节点上渲染vframe
          * @param node 要渲染的节点
          * @param viewPath view路径
          * @param viewInitParams 初始化view时传递的参数，可以在view的init方法中接收
+         * @param deepDestroy 是否深度销毁子view，默认对于恢复后的内容会进行view渲染
          */
-        mountVframe(node: HTMLElement, viewPath: string, viewInitParams?: object): this
+        mount(node: HTMLElementOrEventTarget, viewPath: string, viewInitParams?: object, deepDestroy?: boolean): this
 
         /**
          * 销毁dom节点上渲染的vframe
          * @param node 节点对象或vframe id，默认当前view
          * @param isVframeId 指示node是否为vframe id
+         * @param deepDestroy 是否深度销毁子view，默认对于恢复后的内容会进行view渲染
          */
-        unmountVframe(node?: HTMLElement | string, isVframeId?: boolean): void
+        unmount(node?: HTMLElementOrEventTarget | string, isVframeId?: boolean, deepDestroy?: boolean): void
 
+        // /**
+        //  * 渲染某个节点下的所有子view
+        //  * @param node 节点对象，默认当前view
+        //  * @param viewInitParams 初始化view时传递的参数，可以在view的init方法中接收
+        //  */
+        // mountZone(node?: HTMLElement, viewInitParams?: object): void
+
+        // /**
+        //  * 销毁某个节点下的所有子view
+        //  * @param node 节点对象，默认当前view
+        //  */
+        // unmountZone(node?: HTMLElement): void
+
+        /*#if(modules.richVframe||modules.router){#*/
         /**
-         * 渲染某个节点下的所有子view
-         * @param node 节点对象，默认当前view
-         * @param viewInitParams 初始化view时传递的参数，可以在view的init方法中接收
+         * 获取当前vframe的所有子vframe的id。返回数组中，id在数组中的位置并不固定
          */
-        mountZone(node?: HTMLElement, viewInitParams?: object): void
-
+        children(): string[]
+        /*#}#*/
+        /*#if(modules.richVframe){#*/
         /**
-         * 销毁某个节点下的所有子view
-         * @param node 节点对象，默认当前view
+         * 获取后代vframe对象
+         * @param onlyChild 是否只获取直接子节点，默认false
+         * @returns 所有vframe集合
          */
-        unmountZone(node?: HTMLElement): void
-
+        descendants(onlyChild?: boolean): Vframe[]
         /**
          * 获取祖先vframe
          * @param level 向上查找层级，默认1级，即父vframe
          */
         parent(level?: number): this | null
-
-        /**
-         * 获取当前vframe的所有子vframe的id。返回数组中，id在数组中的位置并不固定
-         */
-        children(): string[]
-
         /**
          * 调用vframe的view中的方法
          * @param name 方法名
          * @param args 传递的参数
          */
-        invoke<TReturnType>(name: string, args?: any[]): TReturnType
+        invoke<TReturnType>(name: string, ...args: any): Promise<TReturnType>
+        /*#}#*/
+        /*#if(modules.richVframeInvokeCancel){#*/
+        /**
+         * 取消invoke中未执行的方法
+         * @param name 方法名称
+         */
+        invokeCancel(name?: string): void
+        /*#}#*/
+        /*#if(modules.router&&modules.routerTip){#*/
+        /**
+         * 软退出当前vframe，如果子或孙view有调用observeExit且条件成立，则会触发相应的退出
+         * @param resolve 子view确认退出时执行的回调
+         * @param reject 子view拒绝退出时执行的回调
+         * @param stop 通知外部应停止后续的代码调用
+         */
+        exit(resolve: () => void, reject: () => void, stop?: () => void): Promise<void>
+        /*#}#*/
+
     }
     /**
      * Vframe类，开发者绝对不需要继承、实例化该类！
@@ -596,7 +626,7 @@
          * 根据节点获取vframe
          * @param node 节点对象
          */
-        byNode(node: HTMLElement): Vframe | null
+        byNode(node: HTMLElementOrEventTarget): Vframe | null
 
         /**
          * 当vframe创建并添加到管理对象上时触发
@@ -635,10 +665,6 @@
         /**
          * 更新界面对象
          */
-        /**
-         * 混入的当前View类原型链上的其它对象
-         */
-        mixins?: ExtendStaticPropertyDescriptor[]
 
         /**
          * 初始化View时调用
@@ -654,7 +680,7 @@
          * @param data 赋值数据
          */
         assign(data: object): boolean
-
+        /*#if(modules.router){#*/
         /**
          * 监听地址栏的改变，如"/app/path?page=1&size=20"，其中"/app/path"为path,"page,size"为参数
          * @param parameters 监听地址栏中的参数，如"page,size"或["page","size"]表示监听page或size的改变
@@ -667,20 +693,21 @@
          * @param observeObject 参数对象
          */
         observeLocation(observeObject: ViewObserveLocation): void
+        /*#}#*/
         /*#if(modules.router&&modules.routerTip){#*/
         /**
-         * 离开确认方法，需要开发者实现离开的界面和逻辑
-         * @param msg 调用leaveTip时传递的离开消息
+         * 离开确认方法，需要开发者重写该方法以实现相关离开的界面和逻辑
+         * @param msg 调用observeExit时传递的离开消息
          * @param resolve 确定离开时调用该方法，通知magix离开
          * @param reject 留在当前界面时调用的方法，通知magix不要离开
          */
-        leaveConfirm(resolve: () => void, reject: () => void, msg: string): void
+        exitConfirm(msg: string, resolve: () => void, reject: () => void): void
         /**
-         * 离开提醒，比如表单有变化且未保存，我们可以提示用户是直接离开，还是保存后再离开
+         * 关注当前view的离开(销毁)动作，允许用户拦截取消。比如表单有变化且未保存，我们可以提示用户是直接离开，还是保存后再离开
          * @param msg 离开提示消息
-         * @param hasChanged 是否显示提示消息的方法，返回true表示需要提示用户
+         * @param hasChanged 是否显示提示信息，返回true表示需要提示用户
          */
-        leaveTip(msg: string, hasChanged: () => boolean): void
+        observeExit(msg: string, hasChanged: () => boolean): void
         /*#}#*/
         /**
          * 获取设置的数据，当key未传递时，返回整个数据对象
@@ -690,9 +717,8 @@
         /**
          * 设置数据
          * @param data 数据对象，如{a:20,b:30}
-         * @param unchanged 指示哪些数据并没有变化的对象
          */
-        set(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, ): this
+        set(data?: { [key: string]: any }): this
         /**
          * 获取设置数据后，是否发生了改变
          */
@@ -700,30 +726,22 @@
         /**
          * 检测数据变化，更新界面，放入数据后需要显式调用该方法才可以把数据更新到界面
          * @param data 数据对象，如{a:20,b:30}
-         * @param unchanged 指示哪些数据并没有变化的对象
-         * @param resolve 完成更新后的回调
          */
-        digest(data?: { [key: string]: any }, unchanged?: { [key: string]: any }, resolve?: () => void): void
-
+        digest(data?: { [key: string]: any }): Promise<any>
         /**
-         * 获取当前数据状态的快照，配合altered方法可获得数据是否有变化
+         * 等待界面异步渲染结束
          */
-        snapshot(): this
-
-        /**
-         * 检测数据是否有变动
-         */
-        altered(): boolean
+        finale(): Promise<void>
         /**
          * 得到模板中@符号对应的原始数据
          * @param data 数据对象
          */
-        translate(data: object): object
+        translate<T extends object>(data: object): T
         /**
          * 得到模板中@符号对应的原始数据
          * @param origin 源字符串
          */
-        parse(origin: string): object
+        parse<T extends object>(origin: string): T
         /**
          * view销毁时触发
          */
@@ -738,12 +756,17 @@
          * @param props 包含可选的init和render方法的对象
          * @param statics 静态方法或属性的对象
          */
-        extend<TProps = object, TStatics = object>(props?: TExtendPropertyDescriptor<TProps & View>, statics?: TStatics): this & TStatics
+        extend<TProps extends object>(props?: ExtendPropertyDescriptor<TProps & View>): this
         /**
          * 扩展到Magix.View原型上的对象
          * @param props 包含可选的ctor方法的对象
          */
-        merge(...args: TExtendPropertyDescriptor<View>[]): this
+        merge(...args: object[]): this
+        /**
+         * 静态方法
+         * @param args 静态方法对象
+         */
+        static<TStatics extends object>(...args: TStatics[]): this & TStatics
         /**
          * 原型
          */
@@ -758,21 +781,21 @@
          * @param metas 接口名称或对象数组
          * @param done 全部接口成功时回调
          */
-        all(metas: ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
+        all(metas: ServiceInterfaceMeta | ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
 
         /**
          * 所有请求完成回调done，与all不同的是：如果接口指定了缓存，all会走缓存，而save则不会
          * @param metas 接口名称或对象数组
          * @param done 全部接口成功时回调
          */
-        save(metas: ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
+        save(metas: ServiceInterfaceMeta | ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
 
         /**
          * 任意一个成功均立即回调，回调会被调用多次
          * @param metas 接口名称或对象数组
          * @param done 全部接口成功时回调
          */
-        one(metas: ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
+        one(metas: ServiceInterfaceMeta | ServiceInterfaceMeta[] | string[] | string, done: (this: this, err: any, ...bags: Bag[]) => void): this
         /**
          * 排队，前一个all,one或save任务做完后的下一个任务，类似promise
          * @param callback 当前面的任务完成后调用该回调
@@ -817,7 +840,7 @@
         meta(meta: ServiceInterfaceMeta | string): ServiceInterfaceMeta
 
         /**
-         * 从缓存中获取或创意bag对象
+         * 从缓存中获取或创建bag对象
          * @param meta 接口元信息对象或名称字符串
          * @param create 是否是创建新的Bag对象，如果否，则尝试从缓存中获取
          */
@@ -858,18 +881,23 @@
             * 设置或获取配置信息
             * @param cfg 配置信息参数对象
             */
-        config<T extends object>(cfg: Config & T): Config & T
+        config<T extends Config>(cfg: T): T
 
         /**
          * 获取配置信息
          * @param key 配置key
          */
-        config(key: string): any
+        config<T>(key: string): T
 
         /**
          * 获取配置信息对象
          */
-        config<T extends object>(): Config & T
+        config<T extends Config>(): T
+        /**
+         * 设置配置信息
+         * @param sources 配置信息参数对象
+         */
+        config(...sources: any[]): any & Config
 
         /**
          * 应用初始化入口
@@ -923,24 +951,25 @@
 
 
         /**
-         * 判断一个节点是否在另外一个节点内，如果比较的2个节点是同一个节点，也返回true
-         * @param node 节点或节点id
-         * @param container 容器节点或节点id
+         * 判断一个节点是否在另外一个节点内，如果ignoreContainer不为true,则比较的2个节点是同一个节点，也返回true
+         * @param node 节点
+         * @param container 容器节点
+         * @param ignoreContainer 是否忽略容器，只判断容器的子节点
          */
-        inside(node: HTMLElement, container: HTMLElement): boolean
+        inside(node: HTMLElementOrEventTarget, container: HTMLElementOrEventTarget, ignoreContainer?: boolean): boolean
 
         /**
          * document.getElementById的简写
          * @param id 节点id
          */
-        node(id: string): HTMLElement | null
+        node<T extends HTMLElementOrEventTarget>(id: string | HTMLElementOrEventTarget): T | null
 
         /**
          * 使用加载器的加载模块功能
          * @param deps 模块id
-         * @param callback 回调
+         * @param params 当有require拦截时，传递的参数
          */
-        use<T extends object>(deps: string | string[], callback: (...args: T[]) => any): void
+        use<T extends object>(deps: string | string[], params?: any): Promise<T>
 
         /**
          * 保护对象不被修改
@@ -954,7 +983,7 @@
          * @param type 事件类型
          * @param data 数据
          */
-        dispatch(node: HTMLElement, type: string, data?: any): void
+        dispatch(node: HTMLElementOrEventTarget | Window, type: string, data?: any): void
         /**
          * 获取对象类型
          * @param aim 目标对象
@@ -968,7 +997,7 @@
         applyStyle(key: string, cssText: string): void
         /**
          * 向页面追加样式
-         * @param atFile 以&#64;开头的文件路径
+         * @param atFile 以@:开头的文件路径
          */
         applyStyle(atFile: string): void
         /**
@@ -985,8 +1014,16 @@
         /**
          * 销毁所有异步标识
          * @param host 宿主对象
+         * @param key 取消哪个异步标识key
          */
-        unmark(host: object): void
+        unmark(host: object, key?: string): void
+        /*#if(modules.taskIdle){#*/
+        /**
+         * 任务队列空闲至多少毫秒
+         * @param time 至少等多久
+         */
+        taskIdle(time: number): Promise<void>,
+        /*#}#*/
         /**
          * 安排、优化待执行的函数
          * @param fn 执行函数
@@ -996,11 +1033,159 @@
          */
         task<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext, id?: string): void
 
+        /**
+         * 最后安排、优化待执行的函数
+         * @param fn 执行函数
+         * @param args 参数
+         * @param context this指向
+         * @param id 任务id,当指定id且同样id有多个时,会取消前面的执行
+         */
+        lowTask<TArgs, TContext>(fn: (this: TContext, ...args: TArgs[]) => void, args?: TArgs[], context?: TContext, id?: string): void
+
+        /**
+        * 等待任务完成
+        */
+        taskFinale<TContext>(): Promise<TContext>
+
+        /**
+        * 等待最后的任务完成
+        */
+        lowTaskFinale<TContext>(): Promise<TContext>
+        /*#if(modules.taskCancel){#*/
+        /**
+         * 取消任务
+         * @param id 任务id
+         */
+        taskCancel(id: string): void,
+        /*#}#*/
+        /**
+         * 检测某个任务是否完成
+         * @param fn 完成后执行的函数
+         */
+        //taskComplete<TArgs>(fn: (...args: TArgs[]) => void): (...args: TArgs[]) => void
+        /**
+         * 复制一个或多个对象属性到目标对象上，并返回该对象。
+         * @param target 目标对象.
+         * @param source 复制对象.
+         */
+        mix<T, U>(target: T, source: U): T & U;
+
+        /**
+         * 复制一个或多个对象属性到目标对象上，并返回该对象。
+         * @param target 目标对象.
+         * @param source1 第一个复制对象.
+         * @param source2 第二个复制对象.
+         */
+        mix<T, U, V>(target: T, source1: U, source2: V): T & U & V;
+
+        /**
+         * 复制一个或多个对象属性到目标对象上，并返回该对象。
+         * @param target 目标对象.
+         * @param source1 第一个复制对象.
+         * @param source2 第二个复制对象.
+         * @param source3 第三个复制对象.
+         */
+        mix<T, U, V, W>(target: T, source1: U, source2: V, source3: W): T & U & V & W;
+
+        /**
+         * 复制一个或多个对象属性到目标对象上，并返回该对象。
+         * @param target 目标对象.
+         * @param sources 一个或多个复制对象
+         */
+        mix(target: object, ...sources: any[]): any;
+
+        /**
+         * 监听事件
+         * @param target 监听对象
+         * @param type 监听类型
+         * @param listener 监听回调
+         * @param options 监听选项
+         */
+        attach(target: Window | EventTarget, type: string, listener: EventListenerOrEventListenerObject | null, options?: AddEventListenerOptions | boolean): void
+        /**
+         * 解除监听事件
+         * @param target 监听对象
+         * @param type 监听类型
+         * @param listener 监听回调
+         * @param options 监听选项
+         */
+        detach(target: Window | EventTarget, type: string, listener: EventListenerOrEventListenerObject | null, options?: EventListenerOptions | boolean): void
+
+        /*#if(modules.batchDOMEvent){#*/
+        /**
+         * 批量监听事件
+         * @param targets 监听对象列表
+         * @param type 监听类型
+         * @param listener 监听回调
+         * @param options 监听选项
+         */
+        attachAll(targets: (Window | EventTarget)[], type: string, listener: EventListenerOrEventListenerObject | null, options?: AddEventListenerOptions | boolean): void
+        /**
+         * 解除监听事件
+         * @param targets 监听对象列表
+         * @param type 监听类型
+         * @param listener 监听回调
+         * @param options 监听选项
+         */
+        detachAll(target: (Window | EventTarget)[], type: string, listener: EventListenerOrEventListenerObject | null, options?: EventListenerOptions | boolean): void
+        /*#}#*/
+        /**
+         * 推迟多少毫秒
+         * @param time 以ms为单位的时间
+         */
+        delay(time: number): Promise<void>
+        /**
+         * 事件最高优先级
+         */
+        HIGH: number
+        /**
+         * 事件最低优先级
+         */
+        LOW: number
         /*#if(modules.service){#*/
         /**
          * 接管管理类
          */
         Service: ServiceConstructor
+        /*#}#*/
+        /*#if(modules.lang){#*/
+        /**
+         * 是否为对象
+         * @param o 测试对象
+         */
+        isObject(o): boolean,
+        /**
+         * 是否为数组
+         * @param o 检测对象
+         */
+        isArray(o): boolean,
+        /**
+         * 是否为函数
+         * @param o 检测对象
+         */
+        isFunction(o): boolean,
+        /**
+         * 是否为字符串
+         * @param o 检测对象
+         */
+        isString(o): boolean,
+        /**
+        * 是否为数字
+        * @param o 检测对象
+        */
+        isNumber(o): boolean,
+        /**
+         * 等待相应的选择器就绪
+         * @param selector 选择器
+         * @param timeout 超时时间，默认30s
+         * @param context 上下文，默认document
+         */
+        waitSelector(selector: string, timeout?: number, context?: Element): Promise<Element>
+        /**
+         * 是否为原始值
+         * @param o 检测对象
+         */
+        isPrimitive(o): boolean,
         /*#}#*/
 
         /**
@@ -1028,7 +1213,7 @@
          */
         Router: Router
         /**
-         * Vframe类，开发者绝对不需要继承、实例化该类！
+         * Vframe类
          */
         Vframe: VframeConstructor
     }

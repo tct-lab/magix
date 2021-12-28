@@ -1,10 +1,9 @@
-function T() { }
-let Extend = (ctor, base, props, statics, cProto?: any) => {
+let Extend = (ctor, base, props?, cProto?: any) => {
     //bProto.constructor = base;
-    T[Prototype] = base[Prototype];
-    cProto = new T();
+    Noop[Prototype] = base[Prototype];
+    cProto = new Noop();
     Assign(cProto, props);
-    Assign(ctor, statics);
+    //Assign(ctor, statics);
     cProto.constructor = ctor;
     ctor[Prototype] = cProto;
     return ctor;

@@ -19,11 +19,8 @@ let Router_Init_Loc = {
     href: Empty
 };
 let Router_LLoc = Router_Init_Loc;
-let Router_TrimHashReg = /(?:^.*\/\/[^\/]+|#.*$)/gi;
+let Router_TrimHashReg = /(?:^.*?\/\/[^/]+|#.*$)/g;
 let Router_TrimQueryReg = /^[^#]*#?/;
-function GetParam(key, defaultValue) {
-    return this[Params][key] || defaultValue !== Undefined ? defaultValue + Empty : Empty;
-}
 /*#if(modules.routerState){#*/
 let Router_State = 1;
 /*#}#*/
@@ -32,7 +29,7 @@ let Router_PNR_Routers, Router_PNR_UnmatchView,
     Router_PNR_DefaultView, Router_PNR_DefaultPath;
 
 let Router_PNR_Rewrite;
-let Router_PNR_Rebuild = ToUri;
+let Router_PNR_Rebuild;
 /*#if(modules.recast){#*/
 let Router_PNR_Recast;
 /*#}#*/
@@ -44,7 +41,7 @@ let Router_Init_PNR = () => {
         //支持默认配置带参数的情况
         Router_PNR_DefaultPath = ParseUri(Mx_Cfg.defaultPath || '/');
         Router_PNR_Rewrite = Mx_Cfg.rewrite;
-        Router_PNR_Rebuild = Mx_Cfg.rebuild || Router_PNR_Rebuild;
+        Router_PNR_Rebuild = Mx_Cfg.rebuild || ToUri;
         /*#if(modules.recast){#*/
         Router_PNR_Recast = Mx_Cfg.recast;
         /*#}#*/
@@ -52,15 +49,19 @@ let Router_Init_PNR = () => {
 };
 let Router_AttachViewAndPath = (loc, view?) => {
     if (!loc[Router_VIEW]) {
-        let path = loc.hash[Path]
-        /*#if(modules.routerState){#*/ || (Router_State && loc.query[Path])/*#}#*/;
+        let path;
+        /*#if(modules.routerForceState){#*/
+        path = loc.query[Path];
+        /*#}else{#*/
+        path = loc.hash[Path]/*#if(modules.routerState){#*/ || (Router_State && loc.query[Path])/*#}#*/;
+        /*#}#*/
         if (!path) {
             path = Router_PNR_DefaultPath[Path];
             Assign(loc[Params], Router_PNR_DefaultPath[Params]);
         }
-
+        loc.srcPath = path;
         if (Router_PNR_Rewrite) {
-            path = Router_PNR_Rewrite(path, loc[Params], Router_PNR_Routers);
+            path = Router_PNR_Rewrite(path, loc[Params], Router_PNR_Routers, loc);
         }
         view = Router_PNR_Routers[path] || Router_PNR_UnmatchView || Router_PNR_DefaultView;
         loc[Path] = path;
@@ -81,49 +82,58 @@ let Router_AttachViewAndPath = (loc, view?) => {
         }
     }
 };
+let Router_SetDiffInfo = (key, result, oldParams, newParams, setObject) => {
+    let from = oldParams[key],
+        to = newParams[key];
+    if (from != to) {
+        setObject[key] = {
+            from,
+            to
+        };
+        result.a = 1;
+    }
+};
 
 let Router_GetChged = (oldLocation, newLocation) => {
     let oKey = oldLocation.href;
     let nKey = newLocation.href;
     let tKey = oKey + Spliter + nKey;
-    let result = Router_ChgdCache.get(tKey);
-    if (!result) {
-        let hasChanged, rps;
-        result = {
-            params: rps = {},
-            force: !oKey //是否强制触发的changed，对于首次加载会强制触发一次
-        };
-        let oldParams = oldLocation[Params],
+    let cached = Router_ChgdCache.get(tKey);
+    if (!cached) {
+        let rps,
+            result = {
+                [Params]: rps = {},
+                force: !oKey //是否强制触发的changed，对于首次加载会强制触发一次
+            }, oldParams = oldLocation[Params],
             newParams = newLocation[Params],
             tArr = Keys(oldParams).concat(Keys(newParams)),
             key;
-        let setDiff = key => {
-            let from = oldParams[key],
-                to = newParams[key];
-            if (from != to) {
-                rps[key] = {
-                    from,
-                    to
-                };
-                hasChanged = 1;
-            }
+        cached = {
+            b: result
         };
         for (key of tArr) {
-            setDiff(key);
+            Router_SetDiffInfo(key, cached, oldParams, newParams, rps);
         }
-        oldParams = oldLocation;
-        newParams = newLocation;
-        rps = result;
-        setDiff(Path);
-        setDiff(Router_VIEW);
-        Router_ChgdCache.set(tKey, result = {
-            a: hasChanged,
-            b: result
-        });
+        Router_SetDiffInfo(Path, cached, oldLocation, newLocation, result);
+        Router_SetDiffInfo(Router_VIEW, cached, oldLocation, newLocation, result);
+        Router_ChgdCache.set(tKey, cached);
+        if (DEBUG) {
+            let whiteList = {
+                params: 1,
+                force: 1,
+                path: 1,
+                view: 1
+            };
+            result = Safeguard(result, false, key => {
+                if (Has(whiteList, key)) {
+                    throw new Error(`avoid write ${key} to router changed object!`);
+                }
+            });
+        }
     }
-    return result;
+    return cached;
 };
-let Router_Parse = (href?) => {
+let Router_Parse = (href?: string) => {
     href = href || Router_WinLoc.href;
 
     let result = Router_HrefCache.get(href),
@@ -135,7 +145,6 @@ let Router_Parse = (href?) => {
         hash = ParseUri(srcHash);
         params = Assign({}, query[Params], hash[Params]);
         result = {
-            get: GetParam,
             href,
             srcQuery,
             srcHash,
@@ -180,7 +189,8 @@ let Router =/*#if(modules.mxevent){#*/ Assign(/*#}#*/{
     parse: Router_Parse,
     diff: Router_Diff,
     to(pn, params, replace, silent) {
-        if (!params && IsObject(pn)) {
+        if (!params &&
+            IsObject(pn)) {
             params = pn;
             pn = Empty;
         }

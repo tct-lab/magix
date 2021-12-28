@@ -1,11 +1,15 @@
 let gulp = require('gulp');
 let fs = require('fs');
 let customize = require('./customize');
+let doc = require('./lib/doc');
 
 let ts = require('typescript');
 
 let type = 'umd,module';
-let enableModules = 'rich,mixins,mxevent,richVframe,xml,router,routerHash,richView';
+//let enableModules = 'mxevent,richVframe,xml,async,service,state,wait,load,lang,spreadMxViewParams';
+let enableModules = 'mxevent,richVframe,xml,async,service,wait,lang,router,routerHash,routerTip,richView,innerView,recast,require,xview,taskComplete,taskIdle,spreadMxViewParams,removeStyle,taskCancel,eventVframe,richVframeInvokeCancel,waitSelector,remold,rewrite,rebuild,load,state,batchDOMEvent,richVframeDescendants,preloadViews,esmoduleCheck';
+//let enableModules = 'xml,async';
+//let enableModules = 'mxevent,richVframe,xml,async';
 
 gulp.task('combine', () => {
     type.split(',').forEach(t => {
@@ -60,3 +64,8 @@ gulp.task('patch', () => {
 gulp.task('default', gulp.parallel('combine', 'patch', () => {
     console.log('done');
 }));
+
+gulp.task('doc', () => {
+    let content = fs.readFileSync('../dist/umd/magix.js').toString();
+    console.log(doc(content));
+})

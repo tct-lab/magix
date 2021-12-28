@@ -1,97 +1,78 @@
-//#snippet;
-//#exclude = all;
-if (typeof DEBUG == 'undefined') window.DEBUG = true;
-(factory => {
-    if (window.define) {
-        define('/*#=modules.moduleId#*/', factory);
-        defind('magix', factory);
+//magix-composer#snippet;
+//magix-composer#exclude = loader;
+
+interface Navigator {
+    scheduling?: {
+        isInputPending(): boolean
     }
-    window.Magix = factory();
-})(() => {
+}
+if (typeof DEBUG == 'undefined') window.DEBUG = true;
+define('/*#=modules.moduleId#*/', () => {
     Inc('../tmpl/var_vars');
     Inc('../tmpl/var_cache');
     Inc('../tmpl/var_dom');
     Inc('../tmpl/var_path');
-    Inc('../tmpl/call');
-    let globalView = GUID();
-    Mx_Cfg.views = {};
-    Mx_Cfg.defaultView = globalView;
-    let globalViewEntity;
-    let isEsModule = o => o.__esModule || (window.Symbol && o[Symbol.toStringTag] === 'Module')
-    let IsFunction = o => Type(o) == 'Function';
-    let Async_Require = (name, fn) => {
-        if (name &&
-            name.prototype &&
-            name.prototype instanceof View) {
-            return fn(name);
-        }
-        if (globalView == name) {
-            if (!globalViewEntity) {
-                globalViewEntity = View.extend();
-            }
-            return fn(globalViewEntity);
-        }
-        let views = Mx_Cfg.views;
-        let results = [];
-        let view;
-        let promiseCount = 0;
-        let checkCount = () => {
-            if (!promiseCount) {
-                CallFunction(fn, results);
-            }
-        };
-        let promise = (p, idx) => {
-            let fn = (v) => {
-                if (!results[idx]) {
-                    promiseCount--;
-                    results[idx] = isEsModule(v) ? v["default"] : v;
-                    checkCount();
+    Inc('../tmpl/call')
+    /*#if(modules.taskIdle){#*/
+    Inc('../tmpl/call.until');
+    /*#}#*/
+    /*#if(modules.load){#*/
+    let resourcesLoadCount = 0;
+    /*#}#*/
+    /*#if(modules.esmoduleCheck){#*/
+    let isEsModule = o => o && (o.__esModule || (window.Symbol && o[Symbol.toStringTag] === 'Module'));
+    /*#}#*/
+    let Async_Require = <T>(/*#if(modules.require){#*/names, params,/*#}else{#*/...names/*#}#*/): Promise<T[]> => {
+        return new GPromise(async r => {
+            let a = [];
+            try {
+                /*#if(modules.require){#*/
+                if (!IsArray(names)) {
+                    names = [names];
                 }
-            };
-            p = p(fn);
-            if (p && p.then) {
-                p.then(fn);
-            }
-        };
-        let seajsCallback = idx => {
-            return m => {
-                promiseCount--;
-                results[idx] = isEsModule(m) ? m.default : m;
-                checkCount();
-            };
-        };
-        if (name) {
-            if (!IsArray(name)) {
-                name = [name];
-            }
-            for (let i = 0; i < name.length; i++) {
-                view = views[name[i]];
-                if (view) {
-                    if (IsFunction(view) && !view.extend) {
-                        promiseCount++;
-                        promise(view, i);
-                    }
-                    else {
-                        results[i] = isEsModule(view) ? view.default : view;
-                    }
-                    checkCount();
+                await Mx_Cfg.require(names, params);
+                /*#}#*/
+                /*#if(modules.load){#*/
+                let load = Mx_Cfg.request;
+                if (!resourcesLoadCount) {
+                    load(1);
                 }
-                else {
-                    if (window.seajs) {
-                        promiseCount++;
-                        seajs.use(name[i], seajsCallback(i));
+                resourcesLoadCount++;
+                /*#}#*/
+                //if (window.seajs) {
+                seajs.use(names, (...g) => {
+                    for (let m of g) {
+                        if (!m && DEBUG) {
+                            console.error('can not load', names);
+                        }
+                        /*#if(modules.esmoduleCheck){#*/
+                        a.push(isEsModule(m) ? m.default : m);
+                        /*#}else{#*/
+                        a.push(m);
+                        /*#}#*/
                     }
-                    else if (window.require) { // 兼容历史版本的写法
-                        view = require(name[i]);
-                        results[i] = isEsModule(view) ? view.default : view;
-                        checkCount();
+                    /*#if(modules.load){#*/
+                    resourcesLoadCount--;
+                    if (!resourcesLoadCount) {
+                        load(0);
                     }
-                }
+                    /*#}#*/
+                    r(a);
+                });
+                /*} else {
+                    if (!Array.isArray(name)) {
+                        name = [name];
+                    }
+                    for (let n of name) {
+                        let m = require(n);
+                        a.push(isEsModule(m) ? m.default : m);
+                    }
+                    CallFunction(fn, a);
+                }*/
+            } catch (ex) {
+                Mx_Cfg.error(ex);
             }
-        }
-        else {
-            checkCount();
-        }
+        });
     };
     Inc('../tmpl/extend');
     Inc('../tmpl/safeguard');
@@ -109,18 +90,7 @@ if (typeof DEBUG == 'undefined') window.DEBUG = true;
     Inc('../tmpl/view');
     Inc('../tmpl/service');
     Inc('../tmpl/magix');
-    Magix.default = Magix;
-    Magix.addView = (name, promiseObj) => {
-        let cfgViews = Mx_Cfg.views;
-        promiseObj.__moduleid__ = name;
-        cfgViews[name] = promiseObj;
-        return promiseObj;
-    };
-
-    Vframe_GetVfId = node => {
-        let id = node['@{~node#vframe.id}'] || (node['@{~node#vframe.id}'] = GUID(Vframe_RootId));
-        if (!node.id) node.id = id;
-        return id;
-    }
+    type InnerMagix = typeof Magix & { default: any }
+    (<InnerMagix>Magix).default = Magix;
     return Magix;
 });

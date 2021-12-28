@@ -3,8 +3,8 @@ let CacheSort = (a, b) => b['@{~cache-item#fre}'] - a['@{~cache-item#fre}'];
 function MxCache(max?: number, buffer?: number/*, remove?: (item: any) => void*/, me?: any) {
     me = this;
     me['@{~cache#list}'] = [];
-    me['@{~cache#buffer.count}'] = buffer || 5; //buffer先取整，如果为0则再默认5
-    me['@{~cache#max.count}'] = me['@{~cache#buffer.count}'] + (max || 20);
+    me['@{~cache#buffer.count}'] = buffer || 20; //buffer先取整，如果为0则再默认5
+    me['@{~cache#max.count}'] = me['@{~cache#buffer.count}'] + (max || 50);
     //me['@{~cache#remove.callback}'] = remove;
 }
 
@@ -27,13 +27,13 @@ Assign(MxCache[Prototype], {
         let r = c[key];
         let t = me['@{~cache#buffer.count}'];
         if (!r) {
-            if (c.length >= me['@{~cache#max.count}']) {
+            if (c.length > me['@{~cache#max.count}']) {
                 c.sort(CacheSort);
                 while (t--) {
                     r = c.pop();
-                    //为什么要判断r['@{~cache-item#fre}']>0,考虑这样的情况：用户设置a,b，主动删除了a,重新设置a,数组中的a原来指向的对象残留在列表里，当排序删除时，如果不判断则会把新设置的删除，因为key都是a
-                    //
-                    if (r['@{~cache-item#fre}'] > 0) me.del(r.o); //如果没有引用，则删除
+                    if (r['@{~cache-item#fre}']) {//important
+                        me.del(r['@{~cache-item#origin.key}']); //如果没有引用，则删除
+                    }
                 }
             }
             r = {
@@ -52,9 +52,9 @@ Assign(MxCache[Prototype], {
         let r = c[k]/*,
             m = this['@{~cache#remove.callback}']*/;
         if (r) {
-            r['@{~cache-item#fre}'] = -1;
+            r['@{~cache-item#fre}'] = 0;
             r['@{~cache-item#entity}'] = Empty;
-            c[k] = Null;
+            delete c[k];// = Null;
             //if (m) {
             //ToTry(m, r['@{~cache-item#origin.key}']);
             //}

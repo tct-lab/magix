@@ -55,7 +55,8 @@ module.exports = {
             let prefix = '$';
             let start = m.charAt(2);
             if (start == '~') {
-                prefix = '';
+                //prefix = '';
+                return '@:{' + m.slice(3);
             }
             return md5(m, m.split('#')[0], prefix);
         });

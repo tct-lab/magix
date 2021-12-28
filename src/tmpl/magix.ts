@@ -1,10 +1,25 @@
 let Magix_Booted = 0;
+/*#if(modules.taskComplete){#*/
+let TaskCompleteCheck = (schedule, callback) => {
+    let taskCount = 0,
+        taskCheck = (...args) => {
+            if (!(--taskCount)) {
+                callback(...args);
+            }
+        };
+    return (...args) => {
+        taskCount++;
+        schedule(taskCheck, [...args]);
+    };
+};
+/*#}#*/
 let Magix = {
-    config(cfg, r) {
-        r = Mx_Cfg;
+    version: '/*#=modules.__version#*/',
+    config(cfg, ...args) {
+        let r = Mx_Cfg;
         if (cfg) {
             if (IsObject(cfg)) {
-                r = Assign(r, cfg);
+                r = Assign(r, cfg, ...args);
             } else {
                 r = r[cfg];
             }
@@ -22,34 +37,14 @@ let Magix = {
             /*#}#*/
             Router_Bind();
             /*#}else{#*/
-            Vframe_Root().mountView(Mx_Cfg.defaultView);
+            Vframe_mountView(Vframe_Root(), Mx_Cfg.defaultView);
             /*#}#*/
-            if (DEBUG) {
-                let whiteList = {
-                    defaultView: 1,
-                    error: 1,
-                    defaultPath: 1,
-                    recast: 1,
-                    rewrite: 1,
-                    require: 1,
-                    paths: 1,
-                    rootId: 1,
-                    routes: 1,
-                    unmatchView: 1,
-                    title: 1
-                };
-                Mx_Cfg = Safeguard(Mx_Cfg, true, (key, value) => {
-                    if (Has(whiteList, key)) {
-                        throw new Error(`avoid write ${key} to magix config!`);
-                    }
-                });
-            }
         }
     },
     unboot() {
         if (Magix_Booted) {
-            /*#if(modules.router){#*/
             Magix_Booted = 0;
+            /*#if(modules.router){#*/
             /*#if(modules.mxevent){#*/
             Router.off(Changed, Dispatcher_NotifyChange);
             /*#}#*/
@@ -58,14 +53,59 @@ let Magix = {
             Vframe_Unroot();
         }
     },
-    /*#if(modules.rich){#*/toMap: ToMap,
+    HIGH: Thousand,
+    LOW: -Thousand,
+    /*#if(modules.lang){#*/
+    isObject: IsObject,
+    isArray: IsArray,
+    isFunction: IsFunction,
+    isString: IsString,
+    isNumber: IsNumber,
+    isPrimitive: IsPrimitive,
+    /*#}#*/
+    /*#if(modules.waitSelector){#*/
+    waitSelector(selector, timeout, context) {
+        context = context || document;
+        timeout = timeout || 30 * Thousand;
+        let target, check, failed, timer = Timeout(() => failed = 1, timeout);
+        return new GPromise((resolve, reject) => {
+            check = () => {
+                target = context.querySelector(selector);
+                if (target) {
+                    ClearTimeout(timer);
+                    resolve(target);
+                } else if (failed) {
+                    reject();
+                } else {
+                    Timeout(check, CallBreakTime);
+                }
+            };
+            Timeout(check, CallBreakTime);
+        });
+    },
+    /*#}#*/
+    attach: EventListen,
+    detach: EventUnlisten,
+    /*#if(modules.batchDOMEvent){#*/
+    attachAll(targets, ...args) {
+        for (let t of targets) {
+            EventListen(t, ...args);
+        }
+    },
+    detachAll(targets, ...args) {
+        for (let t of targets) {
+            EventUnlisten(t, ...args);
+        }
+    },
+    /*#}#*/
+    mix: Assign,
+    toMap: ToMap,
     toTry: ToTry,
     toUrl: ToUri,
     parseUrl: ParseUri,
     guid: GUID,
     use: Async_Require,
     dispatch: DispatchEvent,
-    /*#}#*/
     guard: Safeguard,
     type: Type,
     has: Has,
@@ -89,5 +129,39 @@ let Magix = {
     mark: Mark,
     unmark: Unmark,
     node: GetById,
-    task: CallFunction
+    task: CallFunction,
+    lowTask: LastCallFunction,
+    /*#if(modules.taskIdle){#*/
+    taskIdle: Call_Idle_Until,
+    /*#}#*/
+    taskFinale() {
+        return new GPromise(CallFunction);
+    },
+    lowTaskFinale() {
+        return new GPromise(LastCallFunction);
+    },
+    delay(time) {
+        return new GPromise(r => Timeout(r, time));
+    },
+    /*#if(modules.taskCancel){#*/
+    taskCancel: CallCancel,
+    /*#}#*/
+    /*#if(modules.taskComplete){#*/
+    /**
+     * let checkIfReady=Matix.taskComplete((a,b,c)=>{
+     *  console.log(a,b,c);
+     * });
+     * let process=index=>console.log(index);
+     * for(let i=0;i<10;i++){
+     *  Magix.task(process,[index]);
+     *  checkIfReady(a,b,c);
+     * }
+     */
+    taskComplete(callback) {
+        return TaskCompleteCheck(CallFunction, callback);
+    },
+    lowTaskComplete(callback) {
+        return TaskCompleteCheck(LastCallFunction, callback);
+    }
+    /*#}#*/
 };

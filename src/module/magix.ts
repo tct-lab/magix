@@ -3,18 +3,36 @@ Inc('../tmpl/var_vars');
 Inc('../tmpl/var_cache');
 Inc('../tmpl/var_dom');
 Inc('../tmpl/var_path');
+/*#if(modules.taskIdle){#*/
+Inc('../tmpl/call.until');
+/*#}#*/
 Inc('../tmpl/call');
 let M_Ext = '.js';
 let ImportPromises = {};
-let Async_Require = (name, fn) => {
-    if (name) {
-        if (!IsArray(name)) name = [name];
-        let a = [], b = [], f, s, p;
-        let paths = Mx_Cfg.paths;
-        /*#if(modules.require){#*/
-        let require = Mx_Cfg.require;
+/*#if(modules.load){#*/
+let resourcesLoadCount = 0;
+/*#}#*/
+let Async_Require = async <T>(/*#if(modules.require){#*/names, params,/*#}else{#*/...names/*#}#*/): Promise<T[]> => {
+    let a = [], b = [], f, s, p;
+    let { paths
+    /*#if(modules.load){#*/,
+        request: load
         /*#}#*/
-        for (f of name) {
+    } = Mx_Cfg;
+    /*#if(modules.load){#*/
+    if (!resourcesLoadCount) {
+        load(1);
+    }
+    resourcesLoadCount++;
+    /*#}#*/
+    try {
+        /*#if(modules.require){#*/
+        if (!IsArray(names)) {
+            names = [names];
+        }
+        await Mx_Cfg.require(names, params);
+        /*#}#*/
+        for (f of names) {
             s = f.indexOf('/');
             if (s > -1 && !f.startsWith('.')) {
                 p = f.slice(0, s);
@@ -33,21 +51,20 @@ let Async_Require = (name, fn) => {
             }
             a.push(ImportPromises[f]);
         }
-        /*#if(modules.require){#*/
-        require(name).then(() => {
-            /*#}#*/
-            Promise.all(a).then(args => {
-                for (f of args) {
-                    b.push(f.default);
-                }
-                CallFunction(fn, b);
-            });
-            /*#if(modules.require){#*/
-        });
-        /*#}#*/
-    } else {
-        CallFunction(fn);
+        names = await GPromise.all(a);
+        for (f of names) {
+            b.push(f.default);
+        }
+    } catch (ex) {
+        Mx_Cfg.error(ex);
     }
+    /*#if(modules.load){#*/
+    resourcesLoadCount--;
+    if (!resourcesLoadCount) {
+        load(0);
+    }
+    /*#}#*/
+    return b;
 };
 Inc('../tmpl/extend');
 Inc('../tmpl/safeguard');

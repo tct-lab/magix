@@ -3,7 +3,7 @@ let Router_UpdateHash = (path, replace?) => {
     Router_WinLoc[replace ? 'replace' : 'assign'](Hash_Key + path);
 };
 let Router_Update = (path, params, loc, replace, silent, lQuery) => {
-    path = Router_PNR_Rebuild(path, params, lQuery);
+    path = Router_PNR_Rebuild(path, params, lQuery, loc);
     if (path != loc.srcHash) {
         Router_Silent = silent;
         Router_UpdateHash(path, replace);
@@ -17,7 +17,7 @@ let Router_Bind = () => {
     /*#if(modules.routerTip){#*/
     let lastHash = Router_Parse().srcHash;
     let newHash, suspend;
-    AddEventListener(Doc_Window, 'hashchange', Router_Tip_Hashchange = (e, loc, resolve) => {
+    AddEventListener(Doc_Window, 'hashchange', Router_Tip_Hashchange = (e, loc) => {
         if (suspend) {
             /*#if(modules.routerTipLockUrl){#*/
             Router_UpdateHash(lastHash);
@@ -27,24 +27,22 @@ let Router_Bind = () => {
         loc = Router_Parse();
         newHash = loc.srcHash;
         if (newHash != lastHash) {
-            resolve = () => {
-                e['@{~router-tip#suspend}'] = 1;
-                lastHash = newHash;
-                suspend = Empty;
-                Router_UpdateHash(newHash);
-                Router_Diff();
-            };
             e = {
+                '@{~exit-tip#from}': View_Exit_From_Router,
+                '@{~exit-tip#mutual}': View_Exit_From_Vframe,
                 reject() {
-                    e['@{~router-tip#suspend}'] = 1;
                     suspend = Empty;
                     /*#if(!modules.routerTipLockUrl){#*/
                     Router_UpdateHash(lastHash);
                     /*#}#*/
                 },
-                resolve,
+                resolve() {
+                    lastHash = newHash;
+                    suspend = Empty;
+                    Router_UpdateHash(newHash);
+                    Router_Diff();
+                },
                 stop() {
-                    e['@{~router-tip#suspend}'] = 1;
                     suspend = 1;
                     /*#if(modules.routerTipLockUrl){#*/
                     Router_UpdateHash(lastHash);
@@ -52,9 +50,7 @@ let Router_Bind = () => {
                 }
             };
             Router.fire(Change, e);
-            if (!suspend && !e['@{~router-tip#suspend}']) {
-                resolve();
-            }
+            View_RunExitList(e);
         }
     });
     AddEventListener(Doc_Window, 'beforeunload', Router_Tip_Beforeunload = (e, te, msg) => {

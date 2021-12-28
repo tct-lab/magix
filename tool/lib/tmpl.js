@@ -42,6 +42,7 @@ var tmpl = function (text, data) {
   } catch (e) {
     //e.source = source;
     //console.log('xxxxxxxx',e);
+    console.log(source);
     throw e;
   }
 

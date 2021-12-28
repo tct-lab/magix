@@ -1,7 +1,7 @@
-let Safeguard = data => data;
+let Safeguard = (data, allowDeep?, setter?, prefix?) => data;
 if (DEBUG && window.Proxy) {
     let ProxiesPool = new Map();
-    Safeguard = (data, allowDeep?, setter?, prefix?= '') => {
+    Safeguard = (data, allowDeep?, setter?, prefix = '') => {
         if (IsPrimitive(data)) {
             return data;
         }
@@ -21,10 +21,10 @@ if (DEBUG && window.Proxy) {
         let entity = new Proxy(data, {
             set(target, property, value) {
                 if (!setter && (!prefix || !allowDeep)) {
-                    throw new Error('avoid writeback, key: "' + prefix + property + '" value: ' + value + ' more info: https://github.com/thx/magix/issues/38');
+                    throw new Error('avoid writeback, key: "' + prefix + <string>property + '" value: ' + value + ' more info: https://github.com/thx/magix/issues/38');
                 }
                 if (setter) {
-                    setter(prefix + property, value);
+                    setter(prefix + <string>property, value);
                 }
                 target[property] = value;
                 return true;
@@ -40,7 +40,7 @@ if (DEBUG && window.Proxy) {
                 if (!allowDeep &&
                     Has(target, property) &&
                     (IsArray(out) || IsObject(out))) {
-                    return Safeguard(out, allowDeep, setter, prefix + property + '.');
+                    return Safeguard(out, allowDeep, setter, prefix + <string>property + '.');
                 }
                 return out;
             }
@@ -57,4 +57,8 @@ if (DEBUG && window.Proxy) {
         }
         return entity;
     };
+}
+
+if (DEBUG) {
+    Empty_Object = Safeguard(Empty_Object);
 }
